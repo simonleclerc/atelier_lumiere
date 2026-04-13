@@ -23,5 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Claude Code local settings (per-user)
+# Claude Code local/runtime state (per-user)
 .claude/settings.local.json
+.claude/*.lock
