@@ -1,6 +1,7 @@
 import { useState } from "react";
 import reactLogo from "./assets/react.svg";
-import type { GreetUserUseCase } from "../domain/usecases/GreetUser";
+import type { GreetUserUseCase } from "@/domain/usecases/GreetUser";
+import { Button } from "@/ui/components/ui/button";
 import "./App.css";
 
 interface AppProps {
@@ -44,7 +45,7 @@ function App({ greetUser }: AppProps) {
           onChange={(e) => setName(e.currentTarget.value)}
           placeholder="Enter a name..."
         />
-        <button type="submit">Greet</button>
+        <Button type="submit">Greet</Button>
       </form>
       <p>{greetMsg}</p>
     </main>
