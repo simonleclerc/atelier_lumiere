@@ -1,0 +1,73 @@
+name: Release
+
+# Déclencheurs :
+# - push d'un tag `vX.Y.Z`  -> build automatique + draft release GitHub
+# - trigger manuel via l'onglet Actions (utile pour un premier dry-run sans tag)
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    # contents: write est nécessaire pour que tauri-action puisse créer
+    # et attacher des artefacts à une release GitHub.
+    permissions:
+      contents: write
+
+    strategy:
+      # Si macOS casse, on veut quand même voir le résultat Windows (et vice-versa).
+      fail-fast: false
+      matrix:
+        include:
+          # macOS : on build un universal binary (Intel x86_64 + Apple Silicon arm64)
+          # pour que le même .dmg tourne sur toutes les machines Mac.
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (+ cache yarn)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      # Cache Rust : target/ + ~/.cargo. Décisif pour passer de 15-20 min à 3-5 min.
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install JS dependencies
+        run: yarn install --frozen-lockfile
+
+      # tauri-action fait :
+      # 1. le frontend build (npm/yarn build défini dans tauri.conf.json)
+      # 2. cargo build du backend
+      # 3. bundle en .dmg / .msi / .exe
+      # 4. créé (ou met à jour) la release draft + upload les artefacts
+      - name: Build Tauri app + draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v-dev-{0}', github.run_number) }}
+          releaseName: "Atelier Lumière ${{ github.ref_type == 'tag' && github.ref_name || format('dev build #{0}', github.run_number) }}"
+          releaseDraft: true
+          prerelease: ${{ github.ref_type != 'tag' }}
+          args: ${{ matrix.args }}
