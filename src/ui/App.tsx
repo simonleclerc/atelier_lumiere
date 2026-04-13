@@ -1,15 +1,18 @@
 import { useState } from "react";
 import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
+import type { GreetUserUseCase } from "../domain/usecases/GreetUser";
 import "./App.css";
 
-function App() {
+interface AppProps {
+  greetUser: GreetUserUseCase;
+}
+
+function App({ greetUser }: AppProps) {
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  async function handleGreet() {
+    setGreetMsg(await greetUser.execute(name));
   }
 
   return (
@@ -33,7 +36,7 @@ function App() {
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          greet();
+          handleGreet();
         }}
       >
         <input
