@@ -106,9 +106,3 @@ Pas de cours magistral : la pédagogie se fait **au fil du code**, en lien direc
 - Lib PDF : `pdf-lib` (bas niveau, flexible) vs `@react-pdf/renderer` (composant React, plus ergonomique)
 - State management : Zustand seulement si le useState/useContext ne suffit pas
 - Tests : stratégie à définir (domain en unitaire pur, infra en intégration)
-
-Je chargerai automatiquement le CLAUDE.md et on pourra attaquer. Étapes logiques ensuite :
-1. git init + initialiser le repo
-2. npm create tauri-app@latest pour bootstrapper le projet
-3. Installer Tailwind + shadcn/ui
-4. Première itération : modéliser le domaine (entités Client/Facture) avant de toucher à l'UI ou à Tauri — c'est le cœur de la démarche DDD   

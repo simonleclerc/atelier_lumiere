@@ -1,18 +1,31 @@
-import { GreetUserUseCase } from "../domain/usecases/GreetUser";
-import { TauriGreetingService } from "../infrastructure/tauri/TauriGreetingService";
+import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
+import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
+import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMemory/InMemoryGrilleTarifaireParDefautProvider";
+import { TauriDossierPicker } from "@/infrastructure/tauri/TauriDossierPicker";
+import { TauriFileSystemScanner } from "@/infrastructure/tauri/TauriFileSystemScanner";
+import { TauriSessionRepository } from "@/infrastructure/tauri/TauriSessionRepository";
 
 /**
- * Composition root : le SEUL endroit du projet qui câble
- * les implémentations concrètes (adapters) aux use cases.
+ * Composition root — le SEUL endroit du projet qui câble les adapters concrets
+ * aux use cases. Pour porter l'app sur une autre plateforme (web, mobile,
+ * serveur), c'est ici, et ici seulement, qu'on échange les adapters.
  *
- * Pour porter l'app sur une autre plateforme (web, mobile, serveur),
- * c'est ici — et uniquement ici — qu'on échange les adapters.
- * Aucune autre ligne de l'app ne change.
+ * Exemple : remplacer `TauriSessionRepository` par `HttpSessionRepository`
+ * — aucune autre ligne du projet ne change.
  */
-const greetingService = new TauriGreetingService();
+const sessionRepository = new TauriSessionRepository();
+const fileSystemScanner = new TauriFileSystemScanner();
+const grilleParDefaut = new InMemoryGrilleTarifaireParDefautProvider();
+const dossierPicker = new TauriDossierPicker();
 
 export const container = {
-  greetUser: new GreetUserUseCase(greetingService),
+  creerSession: new CreerSessionUseCase(
+    sessionRepository,
+    fileSystemScanner,
+    grilleParDefaut,
+  ),
+  listerSessions: new ListerSessionsUseCase(sessionRepository),
+  dossierPicker,
 };
 
 export type Container = typeof container;

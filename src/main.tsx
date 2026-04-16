@@ -6,6 +6,10 @@ import "@/index.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App greetUser={container.greetUser} />
+    <App
+      creerSession={container.creerSession}
+      listerSessions={container.listerSessions}
+      dossierPicker={container.dossierPicker}
+    />
   </React.StrictMode>,
 );
