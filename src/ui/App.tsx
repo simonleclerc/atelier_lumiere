@@ -4,6 +4,7 @@ import { SessionDetailPage } from "@/ui/pages/SessionDetailPage";
 import type { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import type { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
+import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 
@@ -11,6 +12,7 @@ interface AppProps {
   creerSession: CreerSessionUseCase;
   listerSessions: ListerSessionsUseCase;
   ajouterAcheteurASession: AjouterAcheteurASessionUseCase;
+  modifierPrixSession: ModifierPrixSessionUseCase;
   trouverSessionParId: TrouverSessionParIdUseCase;
   dossierPicker: DossierPicker;
 }
@@ -21,6 +23,7 @@ function App({
   creerSession,
   listerSessions,
   ajouterAcheteurASession,
+  modifierPrixSession,
   trouverSessionParId,
   dossierPicker,
 }: AppProps) {
@@ -40,6 +43,7 @@ function App({
         <SessionDetailPage
           sessionId={vue.sessionId}
           ajouterAcheteur={ajouterAcheteurASession}
+          modifierPrix={modifierPrixSession}
           trouverSession={trouverSessionParId}
           onRetour={() => setVue({ nom: "liste" })}
         />

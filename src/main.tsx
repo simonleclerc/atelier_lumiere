@@ -10,6 +10,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       creerSession={container.creerSession}
       listerSessions={container.listerSessions}
       ajouterAcheteurASession={container.ajouterAcheteurASession}
+      modifierPrixSession={container.modifierPrixSession}
       trouverSessionParId={container.trouverSessionParId}
       dossierPicker={container.dossierPicker}
     />

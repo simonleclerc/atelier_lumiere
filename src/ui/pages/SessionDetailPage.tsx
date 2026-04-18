@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/ui/components/ui/button";
+import { GrilleTarifaireEditor } from "@/ui/components/GrilleTarifaireEditor";
 import { NouvelAcheteurForm } from "@/ui/components/NouvelAcheteurForm";
 import type { Session } from "@/domain/entities/Session";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
+import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 
 interface Props {
   sessionId: string;
   ajouterAcheteur: AjouterAcheteurASessionUseCase;
+  modifierPrix: ModifierPrixSessionUseCase;
   trouverSession: TrouverSessionParIdUseCase;
   onRetour: () => void;
 }
@@ -15,6 +18,7 @@ interface Props {
 export function SessionDetailPage({
   sessionId,
   ajouterAcheteur,
+  modifierPrix,
   trouverSession,
   onRetour,
 }: Props) {
@@ -73,6 +77,12 @@ export function SessionDetailPage({
           {session.nombrePhotos() > 1 ? "s" : ""}
         </p>
       </header>
+
+      <GrilleTarifaireEditor
+        session={session}
+        modifierPrix={modifierPrix}
+        onMaj={recharger}
+      />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

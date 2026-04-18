@@ -91,4 +91,12 @@ describe("Session (agrégat racine)", () => {
     s.ajouterAcheteur({ nom: "Martin Blanc" });
     expect(s.acheteurs).toHaveLength(2);
   });
+
+  it("modifierPrix remplace le prix d'un format de la grille", () => {
+    const s = Session.creer(entreeValide);
+    expect(s.grilleTarifaire.prixPour(Format._20x30).centimes).toBe(1200);
+    s.modifierPrix(Format._20x30, new Montant(1500));
+    expect(s.grilleTarifaire.prixPour(Format._20x30).centimes).toBe(1500);
+    expect(s.grilleTarifaire.prixPour(Format._15x23).centimes).toBe(800);
+  });
 });

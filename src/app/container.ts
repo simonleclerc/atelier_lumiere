@@ -1,6 +1,7 @@
 import { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
+import { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMemory/InMemoryGrilleTarifaireParDefautProvider";
 import { TauriDossierPicker } from "@/infrastructure/tauri/TauriDossierPicker";
@@ -31,6 +32,7 @@ export const container = {
   ajouterAcheteurASession: new AjouterAcheteurASessionUseCase(
     sessionRepository,
   ),
+  modifierPrixSession: new ModifierPrixSessionUseCase(sessionRepository),
   dossierPicker,
 };
 

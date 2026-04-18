@@ -41,4 +41,16 @@ export class GrilleTarifaire {
   toEntrees(): ReadonlyArray<readonly [Format, Montant]> {
     return Format.TOUS.map((f) => [f, this.prixPour(f)] as const);
   }
+
+  /**
+   * "Évolution immutable" : ne mute pas `this`, retourne un nouveau VO avec
+   * le prix modifié. Règle d'or des Value Objects — un VO n'évolue jamais,
+   * on en construit un nouveau. La Session, elle (entité), peut échanger
+   * sa grille entière contre la nouvelle.
+   */
+  avecPrixModifie(format: Format, montant: Montant): GrilleTarifaire {
+    return new GrilleTarifaire(
+      this.toEntrees().map(([f, m]) => [f, f.egale(format) ? montant : m]),
+    );
+  }
 }

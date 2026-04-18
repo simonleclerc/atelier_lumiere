@@ -1,5 +1,7 @@
 import { CheminDossier } from "../value-objects/CheminDossier";
+import type { Format } from "../value-objects/Format";
 import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
+import type { Montant } from "../value-objects/Montant";
 import type { TypeSession } from "../value-objects/TypeSession";
 import { Acheteur } from "./Acheteur";
 import { Photo } from "./Photo";
@@ -57,14 +59,15 @@ export class Session {
   readonly type: TypeSession;
   readonly dossierSource: CheminDossier;
   readonly dossierExport: CheminDossier;
-  readonly grilleTarifaire: GrilleTarifaire;
   readonly photos: readonly Photo[];
 
   /**
    * Stockage mutable privé : l'agrégat racine a le droit d'évoluer son
-   * état interne au fil du temps (ajout d'acheteurs après-coup), mais
-   * l'extérieur ne voit qu'une vue en lecture seule via le getter.
+   * état interne au fil du temps (ajout d'acheteurs, ajustement de la
+   * grille tarifaire), mais l'extérieur ne voit qu'une vue en lecture
+   * seule via les getters.
    */
+  private _grilleTarifaire: GrilleTarifaire;
   private readonly _acheteurs: Acheteur[];
 
   constructor(donnees: SessionDonnees) {
@@ -104,7 +107,7 @@ export class Session {
     this.type = donnees.type;
     this.dossierSource = donnees.dossierSource;
     this.dossierExport = donnees.dossierExport;
-    this.grilleTarifaire = donnees.grilleTarifaire;
+    this._grilleTarifaire = donnees.grilleTarifaire;
     this.photos = [...donnees.photos].sort((a, b) => a.numero - b.numero);
     this._acheteurs = [...acheteurs];
   }
@@ -138,8 +141,28 @@ export class Session {
     return this._acheteurs;
   }
 
+  get grilleTarifaire(): GrilleTarifaire {
+    return this._grilleTarifaire;
+  }
+
   nombrePhotos(): number {
     return this.photos.length;
+  }
+
+  /**
+   * Ajuste le prix d'un format pour CETTE session. Remplace le VO grille
+   * entier (évolution immutable du VO) ; seule la référence interne de
+   * l'agrégat évolue.
+   *
+   * Note importante pour la suite : modifier la grille n'impactera PAS
+   * les commandes déjà émises, parce qu'une LigneCommande capturera son
+   * montant au moment de sa création (pattern "snapshot" en DDD).
+   */
+  modifierPrix(format: Format, montant: Montant): void {
+    this._grilleTarifaire = this._grilleTarifaire.avecPrixModifie(
+      format,
+      montant,
+    );
   }
 
   /**
