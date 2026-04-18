@@ -6,6 +6,8 @@ import { Toaster } from "@/ui/components/ui/sonner";
 import type { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import type { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
+import type { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
+import type { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
@@ -20,6 +22,8 @@ interface AppProps {
   creerSession: CreerSessionUseCase;
   listerSessions: ListerSessionsUseCase;
   ajouterAcheteurASession: AjouterAcheteurASessionUseCase;
+  modifierAcheteur: ModifierAcheteurUseCase;
+  modifierInfosSession: ModifierInfosSessionUseCase;
   modifierPrixSession: ModifierPrixSessionUseCase;
   trouverSessionParId: TrouverSessionParIdUseCase;
   listerCommandesDeSession: ListerCommandesDeSessionUseCase;
@@ -40,6 +44,8 @@ function App({
   creerSession,
   listerSessions,
   ajouterAcheteurASession,
+  modifierAcheteur,
+  modifierInfosSession,
   modifierPrixSession,
   trouverSessionParId,
   listerCommandesDeSession,
@@ -68,10 +74,13 @@ function App({
         <SessionDetailPage
           sessionId={vue.sessionId}
           ajouterAcheteur={ajouterAcheteurASession}
+          modifierAcheteur={modifierAcheteur}
+          modifierInfosSession={modifierInfosSession}
           modifierPrix={modifierPrixSession}
           trouverSession={trouverSessionParId}
           listerCommandes={listerCommandesDeSession}
           passerCommande={passerCommande}
+          dossierPicker={dossierPicker}
           onRetour={() => setVue({ nom: "liste" })}
           onOuvrirCommande={(commandeId) =>
             setVue({

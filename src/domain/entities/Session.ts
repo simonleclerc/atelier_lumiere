@@ -34,6 +34,13 @@ export class NomAcheteurDejaUtiliseDansSession extends Error {
   }
 }
 
+export class AcheteurIntrouvableDansSession extends Error {
+  constructor(acheteurId: string) {
+    super(`Acheteur introuvable dans la session (id "${acheteurId}").`);
+    this.name = "AcheteurIntrouvableDansSession";
+  }
+}
+
 export interface SessionDonnees {
   readonly id: string;
   readonly commanditaire: string;
@@ -51,14 +58,57 @@ function normaliserNom(nom: string): string {
   return nom.trim().toLowerCase();
 }
 
+interface InfosSession {
+  commanditaire: string;
+  referent: string;
+  date: Date;
+  type: TypeSession;
+  dossierSource: CheminDossier;
+  dossierExport: CheminDossier;
+}
+
+/**
+ * Valide + normalise (trim) les infos éditables. Partagé entre le
+ * constructeur et `modifierInfos` pour garder la règle à un seul endroit.
+ */
+function validerInfos(params: InfosSession): InfosSession {
+  const commanditaire = params.commanditaire.trim();
+  if (!commanditaire) {
+    throw new Error("Session: commanditaire vide refusé.");
+  }
+  const referent = params.referent.trim();
+  if (!referent) {
+    throw new Error("Session: référent vide refusé.");
+  }
+  if (Number.isNaN(params.date.getTime())) {
+    throw new Error("Session: date invalide.");
+  }
+  if (params.dossierSource.egale(params.dossierExport)) {
+    throw new Error(
+      "Session: dossier source et dossier export doivent être distincts (risque d'écrasement).",
+    );
+  }
+  return {
+    commanditaire,
+    referent,
+    date: params.date,
+    type: params.type,
+    dossierSource: params.dossierSource,
+    dossierExport: params.dossierExport,
+  };
+}
+
 export class Session {
   readonly id: string;
-  readonly commanditaire: string;
-  readonly referent: string;
-  readonly date: Date;
-  readonly type: TypeSession;
-  readonly dossierSource: CheminDossier;
-  readonly dossierExport: CheminDossier;
+  // Champs éditables via `modifierInfos` — pas readonly pour que la méthode
+  // puisse les muter après revalidation des invariants. Convention : seul
+  // l'agrégat lui-même y touche, jamais un appelant externe directement.
+  commanditaire: string;
+  referent: string;
+  date: Date;
+  type: TypeSession;
+  dossierSource: CheminDossier;
+  dossierExport: CheminDossier;
   readonly photos: readonly Photo[];
 
   /**
@@ -74,22 +124,7 @@ export class Session {
     if (!donnees.id.trim()) {
       throw new Error("Session: id vide refusé.");
     }
-    const commanditaire = donnees.commanditaire.trim();
-    if (!commanditaire) {
-      throw new Error("Session: commanditaire vide refusé.");
-    }
-    const referent = donnees.referent.trim();
-    if (!referent) {
-      throw new Error("Session: référent vide refusé.");
-    }
-    if (Number.isNaN(donnees.date.getTime())) {
-      throw new Error("Session: date invalide.");
-    }
-    if (donnees.dossierSource.egale(donnees.dossierExport)) {
-      throw new Error(
-        "Session: dossier source et dossier export doivent être distincts (risque d'écrasement).",
-      );
-    }
+    const infos = validerInfos(donnees);
     const numeros = donnees.photos.map((p) => p.numero);
     if (new Set(numeros).size !== numeros.length) {
       throw new Error("Session: numéros de photos dupliqués.");
@@ -101,12 +136,12 @@ export class Session {
     }
 
     this.id = donnees.id;
-    this.commanditaire = commanditaire;
-    this.referent = referent;
-    this.date = donnees.date;
-    this.type = donnees.type;
-    this.dossierSource = donnees.dossierSource;
-    this.dossierExport = donnees.dossierExport;
+    this.commanditaire = infos.commanditaire;
+    this.referent = infos.referent;
+    this.date = infos.date;
+    this.type = infos.type;
+    this.dossierSource = infos.dossierSource;
+    this.dossierExport = infos.dossierExport;
     this._grilleTarifaire = donnees.grilleTarifaire;
     this.photos = [...donnees.photos].sort((a, b) => a.numero - b.numero);
     this._acheteurs = [...acheteurs];
@@ -183,5 +218,60 @@ export class Session {
     const acheteur = Acheteur.creer(params);
     this._acheteurs.push(acheteur);
     return acheteur;
+  }
+
+  /**
+   * Édite les infos de la session. Revalide TOUS les invariants de ces
+   * champs via `validerInfos` — si un utilisateur met le même dossier en
+   * source et export par erreur, c'est refusé comme à la création.
+   *
+   * NE RESCANNE PAS le dossier source : la collection `photos` reste
+   * inchangée. Pour rafraîchir les photos après un changement de dossier
+   * source, un futur use case `RescannerDossierSource` sera nécessaire.
+   */
+  modifierInfos(params: InfosSession): void {
+    const infos = validerInfos(params);
+    this.commanditaire = infos.commanditaire;
+    this.referent = infos.referent;
+    this.date = infos.date;
+    this.type = infos.type;
+    this.dossierSource = infos.dossierSource;
+    this.dossierExport = infos.dossierExport;
+  }
+
+  /**
+   * Édite un acheteur fille. Comme pour `ajouterAcheteur`, l'invariant
+   * d'unicité du nom dans la session est revalidé ICI — on exclut l'acheteur
+   * lui-même de la comparaison pour ne pas détecter son propre nom comme
+   * conflit.
+   *
+   * L'Acheteur étant immutable, on reconstruit une nouvelle instance avec
+   * le même id et on remplace dans la collection. L'id stable garantit
+   * que les commandes qui référencent cet acheteur continuent de pointer
+   * sur la bonne entité après l'édition.
+   */
+  modifierAcheteur(
+    acheteurId: string,
+    params: { nom: string; email?: string; telephone?: string },
+  ): Acheteur {
+    const index = this._acheteurs.findIndex((a) => a.id === acheteurId);
+    if (index === -1) {
+      throw new AcheteurIntrouvableDansSession(acheteurId);
+    }
+    const nomCible = normaliserNom(params.nom);
+    const conflit = this._acheteurs.some(
+      (a, i) => i !== index && normaliserNom(a.nom) === nomCible,
+    );
+    if (conflit) {
+      throw new NomAcheteurDejaUtiliseDansSession(params.nom.trim());
+    }
+    const nouveau = Acheteur.creer({
+      id: acheteurId,
+      nom: params.nom,
+      email: params.email,
+      telephone: params.telephone,
+    });
+    this._acheteurs[index] = nouveau;
+    return nouveau;
   }
 }

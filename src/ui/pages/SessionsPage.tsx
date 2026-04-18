@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
-import { NouvelleSessionForm } from "@/ui/components/NouvelleSessionForm";
+import { SessionForm } from "@/ui/components/SessionForm";
 import type { Session } from "@/domain/entities/Session";
 import type { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import type { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
@@ -50,14 +51,23 @@ export function SessionsPage({
       </header>
 
       {mode === "nouveau" && (
-        <NouvelleSessionForm
-          creerSession={creerSession}
+        <SessionForm
           dossierPicker={dossierPicker}
-          onCree={() => {
-            setMode("liste");
-            recharger();
-          }}
           onAnnuler={() => setMode("liste")}
+          onSoumettre={async (valeurs) => {
+            try {
+              const session = await creerSession.execute(valeurs);
+              toast.success("Session créée", {
+                description: `${session.commanditaire} · ${session.nombrePhotos()} photo${session.nombrePhotos() > 1 ? "s" : ""} détectée${session.nombrePhotos() > 1 ? "s" : ""}`,
+              });
+              setMode("liste");
+              recharger();
+            } catch (err) {
+              toast.error("Création impossible", {
+                description: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }}
         />
       )}
 

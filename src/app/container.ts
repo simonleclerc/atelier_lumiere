@@ -4,6 +4,8 @@ import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
+import { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
+import { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
 import { RetirerLigneDeCommandeUseCase } from "@/domain/usecases/RetirerLigneDeCommande";
@@ -39,6 +41,8 @@ export const container = {
   ajouterAcheteurASession: new AjouterAcheteurASessionUseCase(
     sessionRepository,
   ),
+  modifierAcheteur: new ModifierAcheteurUseCase(sessionRepository),
+  modifierInfosSession: new ModifierInfosSessionUseCase(sessionRepository),
   modifierPrixSession: new ModifierPrixSessionUseCase(sessionRepository),
 
   passerCommande: new PasserCommandeUseCase(

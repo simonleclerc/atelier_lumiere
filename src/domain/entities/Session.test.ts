@@ -3,7 +3,11 @@ import { CheminDossier } from "../value-objects/CheminDossier";
 import { Format } from "../value-objects/Format";
 import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
-import { Session } from "./Session";
+import {
+  AcheteurIntrouvableDansSession,
+  NomAcheteurDejaUtiliseDansSession,
+  Session,
+} from "./Session";
 
 function grilleParDefaut(): GrilleTarifaire {
   return new GrilleTarifaire([
@@ -98,5 +102,97 @@ describe("Session (agrégat racine)", () => {
     s.modifierPrix(Format._20x30, new Montant(1500));
     expect(s.grilleTarifaire.prixPour(Format._20x30).centimes).toBe(1500);
     expect(s.grilleTarifaire.prixPour(Format._15x23).centimes).toBe(800);
+  });
+
+  describe("modifierInfos", () => {
+    it("met à jour les champs éditables", () => {
+      const s = Session.creer(entreeValide);
+      s.modifierInfos({
+        commanditaire: "Nouveau Lieu",
+        referent: "Nouveau Contact",
+        date: new Date("2026-06-01"),
+        type: "Studio",
+        dossierSource: new CheminDossier("/x/src"),
+        dossierExport: new CheminDossier("/x/export"),
+      });
+      expect(s.commanditaire).toBe("Nouveau Lieu");
+      expect(s.referent).toBe("Nouveau Contact");
+      expect(s.type).toBe("Studio");
+      expect(s.dossierSource.valeur).toBe("/x/src");
+    });
+
+    it("rejette source = export", () => {
+      const s = Session.creer(entreeValide);
+      const chemin = new CheminDossier("/identique");
+      expect(() =>
+        s.modifierInfos({
+          commanditaire: "X",
+          referent: "Y",
+          date: new Date("2026-01-01"),
+          type: "Studio",
+          dossierSource: chemin,
+          dossierExport: chemin,
+        }),
+      ).toThrow(/distincts/);
+    });
+
+    it("ne touche pas aux photos ni aux acheteurs", () => {
+      const s = Session.creer(entreeValide);
+      s.ajouterAcheteur({ nom: "Martin" });
+      s.modifierInfos({
+        commanditaire: "Z",
+        referent: "Z",
+        date: new Date("2026-01-02"),
+        type: "Studio",
+        dossierSource: new CheminDossier("/new/src"),
+        dossierExport: new CheminDossier("/new/export"),
+      });
+      expect(s.photos.map((p) => p.numero)).toEqual([1, 2, 3]);
+      expect(s.acheteurs).toHaveLength(1);
+      expect(s.acheteurs[0].nom).toBe("Martin");
+    });
+  });
+
+  describe("modifierAcheteur", () => {
+    it("met à jour le nom et conserve l'id", () => {
+      const s = Session.creer(entreeValide);
+      const ajoute = s.ajouterAcheteur({ nom: "Martin" });
+      const modifie = s.modifierAcheteur(ajoute.id, {
+        nom: "Martin Dupont",
+        email: "martin@example.com",
+      });
+      expect(modifie.id).toBe(ajoute.id);
+      expect(modifie.nom).toBe("Martin Dupont");
+      expect(modifie.email?.valeur).toBe("martin@example.com");
+      expect(s.acheteurs).toHaveLength(1);
+      expect(s.acheteurs[0].id).toBe(ajoute.id);
+    });
+
+    it("rejette un id inconnu", () => {
+      const s = Session.creer(entreeValide);
+      expect(() => s.modifierAcheteur("id-bidon", { nom: "X" })).toThrow(
+        AcheteurIntrouvableDansSession,
+      );
+    });
+
+    it("rejette un nom déjà utilisé par UN AUTRE acheteur", () => {
+      const s = Session.creer(entreeValide);
+      s.ajouterAcheteur({ nom: "Martin Dupont" });
+      const b = s.ajouterAcheteur({ nom: "Martin Blanc" });
+      expect(() => s.modifierAcheteur(b.id, { nom: "martin dupont" })).toThrow(
+        NomAcheteurDejaUtiliseDansSession,
+      );
+    });
+
+    it("accepte que l'acheteur garde son propre nom lors d'un update partiel", () => {
+      const s = Session.creer(entreeValide);
+      const a = s.ajouterAcheteur({ nom: "Martin", email: "old@x.com" });
+      const modifie = s.modifierAcheteur(a.id, {
+        nom: "Martin",
+        email: "new@x.com",
+      });
+      expect(modifie.nom).toBe("Martin");
+      expect(modifie.email?.valeur).toBe("new@x.com");
+    });
   });
 });

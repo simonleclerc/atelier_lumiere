@@ -1,41 +1,44 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
-import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 
-interface Props {
-  sessionId: string;
-  ajouterAcheteur: AjouterAcheteurASessionUseCase;
-  onAjoute: () => void;
-  onAnnuler: () => void;
+export interface AcheteurFormValeurs {
+  readonly nom: string;
+  readonly email?: string;
+  readonly telephone?: string;
 }
 
-export function NouvelAcheteurForm({
-  sessionId,
-  ajouterAcheteur,
-  onAjoute,
+interface Props {
+  valeursInitiales?: AcheteurFormValeurs;
+  onSoumettre: (valeurs: AcheteurFormValeurs) => Promise<void>;
+  onAnnuler: () => void;
+  titre?: string;
+  libelleSubmit?: string;
+  libelleSubmitEnCours?: string;
+}
+
+export function AcheteurForm({
+  valeursInitiales,
+  onSoumettre,
   onAnnuler,
+  titre = "Nouvel acheteur",
+  libelleSubmit = "Ajouter",
+  libelleSubmitEnCours = "Ajout…",
 }: Props) {
-  const [nom, setNom] = useState("");
-  const [email, setEmail] = useState("");
-  const [telephone, setTelephone] = useState("");
+  const [nom, setNom] = useState(valeursInitiales?.nom ?? "");
+  const [email, setEmail] = useState(valeursInitiales?.email ?? "");
+  const [telephone, setTelephone] = useState(
+    valeursInitiales?.telephone ?? "",
+  );
   const [enCours, setEnCours] = useState(false);
 
   async function soumettre(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setEnCours(true);
     try {
-      const acheteur = await ajouterAcheteur.execute({
-        sessionId,
+      await onSoumettre({
         nom,
         email: email || undefined,
         telephone: telephone || undefined,
-      });
-      toast.success("Acheteur inscrit", { description: acheteur.nom });
-      onAjoute();
-    } catch (err) {
-      toast.error("Inscription impossible", {
-        description: err instanceof Error ? err.message : String(err),
       });
     } finally {
       setEnCours(false);
@@ -47,7 +50,7 @@ export function NouvelAcheteurForm({
       onSubmit={soumettre}
       className="flex flex-col gap-4 rounded-lg border border-border bg-card p-6"
     >
-      <h3 className="text-base font-semibold">Nouvel acheteur</h3>
+      <h3 className="text-base font-semibold">{titre}</h3>
 
       <label className="flex flex-col gap-1 text-sm">
         Nom
@@ -88,7 +91,7 @@ export function NouvelAcheteurForm({
           Annuler
         </Button>
         <Button type="submit" disabled={enCours}>
-          {enCours ? "Ajout…" : "Ajouter"}
+          {enCours ? libelleSubmitEnCours : libelleSubmit}
         </Button>
       </div>
     </form>

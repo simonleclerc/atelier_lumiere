@@ -1,36 +1,59 @@
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
-import type { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
-import { TYPES_SESSION } from "@/domain/value-objects/TypeSession";
+import { TYPES_SESSION, type TypeSession } from "@/domain/value-objects/TypeSession";
 
-interface Props {
-  creerSession: CreerSessionUseCase;
-  dossierPicker: DossierPicker;
-  onCree: () => void;
-  onAnnuler: () => void;
+export interface SessionFormValeurs {
+  readonly commanditaire: string;
+  readonly referent: string;
+  readonly date: Date;
+  readonly type: TypeSession;
+  readonly dossierSource: string;
+  readonly dossierExport: string;
 }
 
-export function NouvelleSessionForm({
-  creerSession,
+interface Props {
+  valeursInitiales?: SessionFormValeurs;
+  dossierPicker: DossierPicker;
+  onSoumettre: (valeurs: SessionFormValeurs) => Promise<void>;
+  onAnnuler: () => void;
+  titre?: string;
+  libelleSubmit?: string;
+  libelleSubmitEnCours?: string;
+}
+
+export function SessionForm({
+  valeursInitiales,
   dossierPicker,
-  onCree,
+  onSoumettre,
   onAnnuler,
+  titre = "Nouvelle session",
+  libelleSubmit = "Créer la session",
+  libelleSubmitEnCours = "Création…",
 }: Props) {
-  const [commanditaire, setCommanditaire] = useState("");
-  const [referent, setReferent] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [type, setType] = useState<(typeof TYPES_SESSION)[number]>("Spectacle");
-  const [dossierSource, setDossierSource] = useState("");
-  const [dossierExport, setDossierExport] = useState("");
+  const [commanditaire, setCommanditaire] = useState(
+    valeursInitiales?.commanditaire ?? "",
+  );
+  const [referent, setReferent] = useState(valeursInitiales?.referent ?? "");
+  const [date, setDate] = useState(
+    (valeursInitiales?.date ?? new Date()).toISOString().slice(0, 10),
+  );
+  const [type, setType] = useState<TypeSession>(
+    valeursInitiales?.type ?? "Spectacle",
+  );
+  const [dossierSource, setDossierSource] = useState(
+    valeursInitiales?.dossierSource ?? "",
+  );
+  const [dossierExport, setDossierExport] = useState(
+    valeursInitiales?.dossierExport ?? "",
+  );
   const [enCours, setEnCours] = useState(false);
 
   async function choisir(
-    titre: string,
+    titreDialog: string,
     setter: (v: string) => void,
   ): Promise<void> {
-    const chemin = await dossierPicker.choisir(titre);
+    const chemin = await dossierPicker.choisir(titreDialog);
     if (chemin) setter(chemin);
   }
 
@@ -38,21 +61,13 @@ export function NouvelleSessionForm({
     e.preventDefault();
     setEnCours(true);
     try {
-      const session = await creerSession.execute({
+      await onSoumettre({
         commanditaire,
         referent,
         date: new Date(date),
         type,
         dossierSource,
         dossierExport,
-      });
-      toast.success("Session créée", {
-        description: `${session.commanditaire} · ${session.nombrePhotos()} photo${session.nombrePhotos() > 1 ? "s" : ""} détectée${session.nombrePhotos() > 1 ? "s" : ""}`,
-      });
-      onCree();
-    } catch (err) {
-      toast.error("Création impossible", {
-        description: err instanceof Error ? err.message : String(err),
       });
     } finally {
       setEnCours(false);
@@ -64,7 +79,7 @@ export function NouvelleSessionForm({
       onSubmit={soumettre}
       className="flex flex-col gap-4 rounded-lg border border-border bg-card p-6"
     >
-      <h2 className="text-lg font-semibold">Nouvelle session</h2>
+      <h2 className="text-lg font-semibold">{titre}</h2>
 
       <label className="flex flex-col gap-1 text-sm">
         Commanditaire
@@ -104,9 +119,7 @@ export function NouvelleSessionForm({
           Type
           <select
             value={type}
-            onChange={(e) =>
-              setType(e.currentTarget.value as (typeof TYPES_SESSION)[number])
-            }
+            onChange={(e) => setType(e.currentTarget.value as TypeSession)}
             className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {TYPES_SESSION.map((t) => (
@@ -155,7 +168,7 @@ export function NouvelleSessionForm({
           Annuler
         </Button>
         <Button type="submit" disabled={enCours}>
-          {enCours ? "Création…" : "Créer la session"}
+          {enCours ? libelleSubmitEnCours : libelleSubmit}
         </Button>
       </div>
     </form>

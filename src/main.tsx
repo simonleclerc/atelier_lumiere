@@ -10,6 +10,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       creerSession={container.creerSession}
       listerSessions={container.listerSessions}
       ajouterAcheteurASession={container.ajouterAcheteurASession}
+      modifierAcheteur={container.modifierAcheteur}
+      modifierInfosSession={container.modifierInfosSession}
       modifierPrixSession={container.modifierPrixSession}
       trouverSessionParId={container.trouverSessionParId}
       listerCommandesDeSession={container.listerCommandesDeSession}

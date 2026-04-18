@@ -311,6 +311,43 @@ Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs mé
 
 ---
 
+## Slice édition — modifier une session et ses acheteurs
+
+**Valeur métier** : corriger une info mal saisie à la création (mauvais dossier export, faute de frappe sur un nom), sans devoir tout recréer.
+
+**Livrables** :
+- `Session.modifierInfos(params)` et `Session.modifierAcheteur(acheteurId, params)` — méthodes d'agrégat qui revalident leurs invariants
+- Erreur `AcheteurIntrouvableDansSession` (nouveau)
+- Use cases `ModifierInfosSessionUseCase` et `ModifierAcheteurUseCase`
+- Unification des formulaires : `NouvelleSessionForm` → `SessionForm` et `NouvelAcheteurForm` → `AcheteurForm`, avec prop `valeursInitiales?` + callback `onSoumettre` générique — même composant utilisé pour création **et** édition
+- UI : bouton « Modifier » dans le header de `SessionDetailPage`, bouton « Modifier » sur chaque `AcheteurCard`
+
+### Patterns DDD introduits
+
+#### Revalidation centralisée des invariants
+
+Une fonction `validerInfos(params)` est partagée entre le **constructeur** et `modifierInfos`. Elle garantit qu'un invariant codé une seule fois s'applique à la création **et** à l'édition. Un invariant métier n'est jamais « vrai à la naissance puis oublié » — il s'applique à tout moment.
+
+**Piège évité** : dupliquer la logique de validation dans deux méthodes (création / édition). Classique et insidieux — le jour où on durcit une règle, on oublie l'un des deux endroits et on introduit une incohérence.
+
+#### Entité immutable remplacée dans la collection (vs entité mutable)
+
+Deux choix cohabitent dans Session :
+- **`modifierInfos`** mute les champs de l'agrégat directement (les champs ne sont plus `readonly`). OK parce que Session est une entité avec cycle de vie.
+- **`modifierAcheteur`** ne mute PAS l'Acheteur (qui reste immutable, tous ses champs `readonly`). À la place, on construit un **nouvel** Acheteur avec le même `id` et on **remplace** dans la collection.
+
+Les deux approches sont valides en DDD. La seconde (immutable + remplacement) est plus sûre quand l'entité est souvent passée par référence à du code extérieur — elle évite les « action à distance ». La première est plus naturelle pour l'agrégat racine, qui a le contrôle de sa visibilité. On a retenu la seconde pour Acheteur car les `LigneCommande` référencent un `acheteur.id` — garder l'id stable est crucial, et l'immutabilité du reste du contenu signale que l'objet capturé dans une closure reste cohérent.
+
+#### Exclure self de la vérification d'unicité
+
+Dans `modifierAcheteur`, la vérification de doublon de nom **exclut l'acheteur qu'on modifie** (`i !== index`). Sinon, un acheteur qui garde son propre nom lors d'un update partiel (changement d'email seul) déclencherait faussement `NomAcheteurDejaUtiliseDansSession`. Détail qu'on oublie facilement quand on copie-colle la logique d'ajout.
+
+#### DRY d'UI : un seul composant form pour création et édition
+
+`SessionForm` et `AcheteurForm` reçoivent une prop optionnelle `valeursInitiales`. Sans elle → mode création. Avec elle → pré-remplissage pour édition. Le parent gère l'appel au use case et les toasts. Résultat : zéro duplication de layout, une seule source de vérité pour la forme et la validation côté UI.
+
+---
+
 # Points d'attention récurrents
 
 Les **3 frictions Clean Archi** sur lesquelles un dev React débute en DDD se casse les dents. À relire régulièrement.

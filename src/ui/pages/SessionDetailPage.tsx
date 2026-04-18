@@ -1,25 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
+import { AcheteurForm } from "@/ui/components/AcheteurForm";
 import { GrilleTarifaireEditor } from "@/ui/components/GrilleTarifaireEditor";
-import { NouvelAcheteurForm } from "@/ui/components/NouvelAcheteurForm";
+import { SessionForm } from "@/ui/components/SessionForm";
 import type { Acheteur } from "@/domain/entities/Acheteur";
 import type { Commande } from "@/domain/entities/Commande";
 import type { Session } from "@/domain/entities/Session";
 import { Montant } from "@/domain/value-objects/Montant";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
+import type { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
+import type { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import type { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
+import type { DossierPicker } from "@/ui/ports/DossierPicker";
 
 interface Props {
   sessionId: string;
   ajouterAcheteur: AjouterAcheteurASessionUseCase;
+  modifierAcheteur: ModifierAcheteurUseCase;
+  modifierInfosSession: ModifierInfosSessionUseCase;
   modifierPrix: ModifierPrixSessionUseCase;
   trouverSession: TrouverSessionParIdUseCase;
   listerCommandes: ListerCommandesDeSessionUseCase;
   passerCommande: PasserCommandeUseCase;
+  dossierPicker: DossierPicker;
   onRetour: () => void;
   onOuvrirCommande: (commandeId: string) => void;
 }
@@ -36,10 +43,13 @@ const OPTIONS_TRI: { id: TriAcheteurs; label: string }[] = [
 export function SessionDetailPage({
   sessionId,
   ajouterAcheteur,
+  modifierAcheteur,
+  modifierInfosSession,
   modifierPrix,
   trouverSession,
   listerCommandes,
   passerCommande,
+  dossierPicker,
   onRetour,
   onOuvrirCommande,
 }: Props) {
@@ -47,7 +57,9 @@ export function SessionDetailPage({
   const [commandes, setCommandes] = useState<readonly Commande[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [formOuvert, setFormOuvert] = useState(false);
+  const [editionSession, setEditionSession] = useState(false);
+  const [nouvelAcheteurOuvert, setNouvelAcheteurOuvert] = useState(false);
+  const [acheteurEnEdition, setAcheteurEnEdition] = useState<string | null>(null);
   const [triPar, setTriPar] = useState<TriAcheteurs>("ajout");
 
   const recharger = useCallback(async () => {
@@ -117,17 +129,71 @@ export function SessionDetailPage({
     );
   }
 
+  if (editionSession) {
+    return (
+      <section className="flex flex-col gap-4">
+        <Button
+          variant="ghost"
+          className="self-start"
+          onClick={() => setEditionSession(false)}
+        >
+          ← Annuler l'édition
+        </Button>
+        <SessionForm
+          dossierPicker={dossierPicker}
+          valeursInitiales={{
+            commanditaire: session.commanditaire,
+            referent: session.referent,
+            date: session.date,
+            type: session.type,
+            dossierSource: session.dossierSource.valeur,
+            dossierExport: session.dossierExport.valeur,
+          }}
+          titre="Modifier la session"
+          libelleSubmit="Enregistrer les modifications"
+          libelleSubmitEnCours="Enregistrement…"
+          onAnnuler={() => setEditionSession(false)}
+          onSoumettre={async (valeurs) => {
+            try {
+              await modifierInfosSession.execute({
+                sessionId: session.id,
+                ...valeurs,
+              });
+              toast.success("Session mise à jour", {
+                description: valeurs.commanditaire,
+              });
+              setEditionSession(false);
+              recharger();
+            } catch (err) {
+              toast.error("Mise à jour impossible", {
+                description: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <Button variant="ghost" className="self-start" onClick={onRetour}>
           ← Retour aux sessions
         </Button>
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h1 className="text-2xl font-semibold">{session.commanditaire}</h1>
-          <span className="text-sm text-muted-foreground">
-            {session.type} · {session.date.toLocaleDateString("fr-FR")}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">
+              {session.type} · {session.date.toLocaleDateString("fr-FR")}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => setEditionSession(true)}
+            >
+              Modifier
+            </Button>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           Référent : {session.referent} · {session.nombrePhotos()} photo
@@ -167,43 +233,87 @@ export function SessionDetailPage({
                 </select>
               </label>
             )}
-            {!formOuvert && (
-              <Button onClick={() => setFormOuvert(true)}>
+            {!nouvelAcheteurOuvert && (
+              <Button onClick={() => setNouvelAcheteurOuvert(true)}>
                 Nouvel acheteur
               </Button>
             )}
           </div>
         </div>
 
-        {formOuvert && (
-          <NouvelAcheteurForm
-            sessionId={session.id}
-            ajouterAcheteur={ajouterAcheteur}
-            onAjoute={() => {
-              setFormOuvert(false);
-              recharger();
+        {nouvelAcheteurOuvert && (
+          <AcheteurForm
+            onAnnuler={() => setNouvelAcheteurOuvert(false)}
+            onSoumettre={async (valeurs) => {
+              try {
+                const ajoute = await ajouterAcheteur.execute({
+                  sessionId: session.id,
+                  ...valeurs,
+                });
+                toast.success("Acheteur inscrit", { description: ajoute.nom });
+                setNouvelAcheteurOuvert(false);
+                recharger();
+              } catch (err) {
+                toast.error("Inscription impossible", {
+                  description: err instanceof Error ? err.message : String(err),
+                });
+              }
             }}
-            onAnnuler={() => setFormOuvert(false)}
           />
         )}
 
-        {session.acheteurs.length === 0 && !formOuvert && (
+        {session.acheteurs.length === 0 && !nouvelAcheteurOuvert && (
           <p className="text-sm text-muted-foreground">
             Aucun acheteur inscrit sur cette session.
           </p>
         )}
 
         <div className="flex flex-col gap-3">
-          {acheteursTries.map((a) => (
-            <AcheteurCard
-              key={a.id}
-              acheteur={a}
-              commandes={commandes.filter((c) => c.acheteurId === a.id)}
-              sessionId={session.id}
-              passerCommande={passerCommande}
-              onOuvrirCommande={onOuvrirCommande}
-            />
-          ))}
+          {acheteursTries.map((a) =>
+            acheteurEnEdition === a.id ? (
+              <AcheteurForm
+                key={a.id}
+                valeursInitiales={{
+                  nom: a.nom,
+                  email: a.email?.valeur,
+                  telephone: a.telephone,
+                }}
+                titre={`Modifier ${a.nom}`}
+                libelleSubmit="Enregistrer"
+                libelleSubmitEnCours="Enregistrement…"
+                onAnnuler={() => setAcheteurEnEdition(null)}
+                onSoumettre={async (valeurs) => {
+                  try {
+                    const modifie = await modifierAcheteur.execute({
+                      sessionId: session.id,
+                      acheteurId: a.id,
+                      ...valeurs,
+                    });
+                    toast.success("Acheteur mis à jour", {
+                      description: modifie.nom,
+                    });
+                    setAcheteurEnEdition(null);
+                    recharger();
+                  } catch (err) {
+                    toast.error("Mise à jour impossible", {
+                      description:
+                        err instanceof Error ? err.message : String(err),
+                    });
+                  }
+                }}
+              />
+            ) : (
+              <AcheteurCard
+                key={a.id}
+                acheteur={a}
+                commandes={commandes.filter((c) => c.acheteurId === a.id)}
+                sessionId={session.id}
+                passerCommande={passerCommande}
+                onOuvrirCommande={onOuvrirCommande}
+                onModifier={() => setAcheteurEnEdition(a.id)}
+              />
+            ),
+          )}
         </div>
       </section>
     </section>
@@ -259,12 +369,14 @@ function AcheteurCard({
   sessionId,
   passerCommande,
   onOuvrirCommande,
+  onModifier,
 }: {
   acheteur: Acheteur;
   commandes: readonly Commande[];
   sessionId: string;
   passerCommande: PasserCommandeUseCase;
   onOuvrirCommande: (id: string) => void;
+  onModifier: () => void;
 }) {
   const [enCours, setEnCours] = useState(false);
 
@@ -314,6 +426,9 @@ function AcheteurCard({
               {caAcheteur.toString()}
             </span>
           )}
+          <Button variant="ghost" onClick={onModifier}>
+            Modifier
+          </Button>
           <Button variant="outline" onClick={creerCommande} disabled={enCours}>
             {enCours ? "…" : "Passer une commande"}
           </Button>
