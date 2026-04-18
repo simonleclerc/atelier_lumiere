@@ -3,6 +3,7 @@ import { Button } from "@/ui/components/ui/button";
 import type { Commande } from "@/domain/entities/Commande";
 import type { Session } from "@/domain/entities/Session";
 import type { AjouterLigneACommandeUseCase } from "@/domain/usecases/AjouterLigneACommande";
+import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { RetirerLigneDeCommandeUseCase } from "@/domain/usecases/RetirerLigneDeCommande";
 import type { TrouverCommandeParIdUseCase } from "@/domain/usecases/TrouverCommandeParId";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
@@ -14,6 +15,7 @@ interface Props {
   trouverSession: TrouverSessionParIdUseCase;
   ajouterLigne: AjouterLigneACommandeUseCase;
   retirerLigne: RetirerLigneDeCommandeUseCase;
+  exporter: ExporterCommandeUseCase;
   onRetour: () => void;
 }
 
@@ -23,12 +25,15 @@ export function CommandePage({
   trouverSession,
   ajouterLigne,
   retirerLigne,
+  exporter,
   onRetour,
 }: Props) {
   const [commande, setCommande] = useState<Commande | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [exportEnCours, setExportEnCours] = useState(false);
+  const [exportResume, setExportResume] = useState<string | null>(null);
 
   const recharger = useCallback(async () => {
     setChargement(true);
@@ -136,14 +141,43 @@ export function CommandePage({
         ))}
 
         {commande.lignes.length > 0 && (
-          <div className="mt-2 flex items-baseline justify-between border-t border-border pt-3">
-            <span className="text-sm text-muted-foreground">
-              Total ({commande.nombreTirages()} tirage
-              {commande.nombreTirages() > 1 ? "s" : ""})
-            </span>
-            <span className="text-lg font-semibold">
-              {commande.total().toString()}
-            </span>
+          <div className="mt-2 flex flex-col gap-3 border-t border-border pt-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted-foreground">
+                Total ({commande.nombreTirages()} tirage
+                {commande.nombreTirages() > 1 ? "s" : ""})
+              </span>
+              <span className="text-lg font-semibold">
+                {commande.total().toString()}
+              </span>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <Button
+                onClick={async () => {
+                  setExportEnCours(true);
+                  setExportResume(null);
+                  setErreur(null);
+                  try {
+                    const r = await exporter.execute({ commandeId: commande.id });
+                    setExportResume(
+                      `${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""} exporté${r.fichiersCrees > 1 ? "s" : ""} dans ${session.dossierExport.valeur}`,
+                    );
+                  } catch (err) {
+                    setErreur(
+                      err instanceof Error ? err.message : String(err),
+                    );
+                  } finally {
+                    setExportEnCours(false);
+                  }
+                }}
+                disabled={exportEnCours}
+              >
+                {exportEnCours ? "Export en cours…" : "Exporter vers le dossier"}
+              </Button>
+              {exportResume && (
+                <p className="text-xs text-muted-foreground">{exportResume}</p>
+              )}
+            </div>
           </div>
         )}
       </section>

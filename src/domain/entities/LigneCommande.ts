@@ -73,4 +73,47 @@ export class LigneCommande {
   total(): Montant {
     return this.montantUnitaire.multiplierPar(this.quantite);
   }
+
+  /**
+   * Produit la liste des fichiers à créer à l'export pour cette ligne.
+   * Chaque entrée = un sous-dossier (nommé par le format) + un nom de
+   * fichier slugifié `{acheteur}_{photo}_{i}.jpg`.
+   *
+   * Le format `Numerique` partage la même logique que les formats
+   * d'impression — si quantité = 3, on crée 3 copies dans `Numerique/`.
+   * Cohérence uniforme ; si le copain veut une logique différente pour
+   * le numérique plus tard, c'est ICI qu'on la met.
+   */
+  nomsFichiersExport(nomAcheteur: string): ReadonlyArray<{
+    readonly sousDossier: string;
+    readonly nomFichier: string;
+  }> {
+    const slug = slugifierNomAcheteur(nomAcheteur);
+    const sousDossier = this.format.toDossierName();
+    return Array.from({ length: this.quantite }, (_, i) => ({
+      sousDossier,
+      nomFichier: `${slug}_${this.photoNumero}_${i + 1}.jpg`,
+    }));
+  }
+}
+
+/**
+ * Normalise un nom d'acheteur en slug compatible filesystem :
+ * trim, lowercase, accents dépouillés, espaces → underscore, strip du
+ * reste. Pur, testé, sans dépendance externe.
+ */
+export function slugifierNomAcheteur(nom: string): string {
+  const slug = nom
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_-]/g, "");
+  if (!slug) {
+    throw new Error(
+      `Nom d'acheteur vide après normalisation : "${nom}" n'a pas de caractère exploitable.`,
+    );
+  }
+  return slug;
 }

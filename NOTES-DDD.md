@@ -271,6 +271,46 @@ Contrairement à un VO (identité par valeur), l'entité fille est la bonne rép
 
 ---
 
+## Slice 4 — Export physique des fichiers
+
+**Valeur métier** : le moment le plus concret pour le photographe — cliquer « Exporter » sur une commande produit les fichiers renommés et rangés dans le dossier d'export de la session, prêts à être envoyés à l'imprimeur.
+
+**Livrables** :
+- Port `FileCopier` (`copier(source, destination)`) + erreur métier `FichierSourceIntrouvable`
+- Méthode de domaine pur `LigneCommande.nomsFichiersExport(nomAcheteur)` qui produit la liste des cibles `{ sousDossier, nomFichier }` pour une ligne
+- Fonction pure `slugifierNomAcheteur(nom)` exportée pour le nommage filesystem-safe (trim, lowercase, NFD, strip accents, espaces→underscore, strip chars non-safe)
+- Use case `ExporterCommandeUseCase` qui orchestre charge commande → charge session → retrouve acheteur → boucle lignes × quantité → copie
+- Adapter `TauriFileCopier` (plugin-fs : `mkdir -p` automatique du dossier parent puis `copyFile`)
+- UI : bouton « Exporter vers le dossier » dans `CommandePage` avec feedback `N fichiers exportés dans {chemin}`
+
+### Patterns DDD introduits
+
+#### Méthode de domaine pure qui produit des instructions (pas qui fait l'I/O)
+
+`LigneCommande.nomsFichiersExport(nomAcheteur)` retourne **une liste d'instructions** (`{ sousDossier, nomFichier }[]`) pour l'export. Elle **ne fait pas** l'I/O — c'est le use case qui fait les `copier()`.
+
+Conséquence précieuse : cette méthode est 100 % pure, testable unitairement en trois lignes, réutilisable si on change d'adapter (HTTP, S3, ZIP à télécharger…).
+
+**Règle** : quand tu es tenté de mettre une méthode qui fait un appel externe dans une entité, demande-toi si tu peux séparer (le QUOI dans l'entité, le COMMENT dans le use case). C'est presque toujours possible, et presque toujours un gain.
+
+**Fichier** : `src/domain/entities/LigneCommande.ts` — la méthode est à côté de `total()`, toutes les deux pures, toutes les deux testées.
+
+#### Idempotence d'un use case
+
+`ExporterCommandeUseCase` est **idempotent** : relancer l'export produit les mêmes fichiers aux mêmes emplacements (écrasement assumé). Pas de suivi d'état « déjà exporté » en V1 — la présence des fichiers dans le dossier d'export suffit au copain.
+
+**Règle** : quand un use case est déterministe à partir de son état en base, éviter d'ajouter un état mutant (« exportée », « facturée »…) tant qu'il ne répond pas à une vraie question métier. C'est du YAGNI appliqué aux agrégats.
+
+#### Erreurs métier traduites par l'adapter
+
+Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs métier : `FichierSourceIntrouvable` si la photo source a disparu (dossier déplacé, fichier supprimé). Le domaine ne voit jamais un `FsError` Tauri. Rappel de la règle : « les ports parlent le langage du domaine ».
+
+#### Réutilisation d'une erreur cross-aggregate
+
+`ExporterCommande` réutilise `AcheteurNAppartientPasASession` (déjà définie dans `PasserCommande.ts`) quand l'acheteur a disparu de la session entre le moment de la commande et le moment de l'export. Même sémantique métier, pas de duplication — on importe. Si le pattern se multiplie, on factorisera dans un fichier d'erreurs partagées.
+
+---
+
 # Points d'attention récurrents
 
 Les **3 frictions Clean Archi** sur lesquelles un dev React débute en DDD se casse les dents. À relire régulièrement.
@@ -315,7 +355,6 @@ Les sources citées dans les commentaires du code, à picorer en fonction des qu
 
 # Roadmap restante
 
-- **Slice 4 — Export physique** : use case `ExporterCommande` + port `FileCopier`. Duplication en `{acheteur}_{photo}_{i}.jpg`, traitement spécial du format `Numerique` (sous-dossier dédié).
 - **Slice 5 — Facture PDF** : nouveau port `PdfRenderer`, choix de lib à trancher (`pdf-lib` vs `@react-pdf/renderer`).
 
 Questions encore ouvertes côté métier (voir le discovery) :

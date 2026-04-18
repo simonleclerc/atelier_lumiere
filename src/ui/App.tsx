@@ -12,6 +12,7 @@ import type { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
 import type { TrouverCommandeParIdUseCase } from "@/domain/usecases/TrouverCommandeParId";
 import type { AjouterLigneACommandeUseCase } from "@/domain/usecases/AjouterLigneACommande";
 import type { RetirerLigneDeCommandeUseCase } from "@/domain/usecases/RetirerLigneDeCommande";
+import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 
 interface AppProps {
@@ -25,6 +26,7 @@ interface AppProps {
   trouverCommandeParId: TrouverCommandeParIdUseCase;
   ajouterLigneACommande: AjouterLigneACommandeUseCase;
   retirerLigneDeCommande: RetirerLigneDeCommandeUseCase;
+  exporterCommande: ExporterCommandeUseCase;
   dossierPicker: DossierPicker;
 }
 
@@ -44,6 +46,7 @@ function App({
   trouverCommandeParId,
   ajouterLigneACommande,
   retirerLigneDeCommande,
+  exporterCommande,
   dossierPicker,
 }: AppProps) {
   const [vue, setVue] = useState<Vue>({ nom: "liste" });
@@ -83,6 +86,7 @@ function App({
           trouverSession={trouverSessionParId}
           ajouterLigne={ajouterLigneACommande}
           retirerLigne={retirerLigneDeCommande}
+          exporter={exporterCommande}
           onRetour={() =>
             setVue({ nom: "detail", sessionId: vue.sessionIdRetour })
           }

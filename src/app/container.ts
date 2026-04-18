@@ -1,6 +1,7 @@
 import { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import { AjouterLigneACommandeUseCase } from "@/domain/usecases/AjouterLigneACommande";
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
+import { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
@@ -11,6 +12,7 @@ import { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParI
 import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMemory/InMemoryGrilleTarifaireParDefautProvider";
 import { TauriCommandeRepository } from "@/infrastructure/tauri/TauriCommandeRepository";
 import { TauriDossierPicker } from "@/infrastructure/tauri/TauriDossierPicker";
+import { TauriFileCopier } from "@/infrastructure/tauri/TauriFileCopier";
 import { TauriFileSystemScanner } from "@/infrastructure/tauri/TauriFileSystemScanner";
 import { TauriSessionRepository } from "@/infrastructure/tauri/TauriSessionRepository";
 
@@ -22,6 +24,7 @@ import { TauriSessionRepository } from "@/infrastructure/tauri/TauriSessionRepos
 const sessionRepository = new TauriSessionRepository();
 const commandeRepository = new TauriCommandeRepository();
 const fileSystemScanner = new TauriFileSystemScanner();
+const fileCopier = new TauriFileCopier();
 const grilleParDefaut = new InMemoryGrilleTarifaireParDefautProvider();
 const dossierPicker = new TauriDossierPicker();
 
@@ -51,6 +54,11 @@ export const container = {
     sessionRepository,
   ),
   retirerLigneDeCommande: new RetirerLigneDeCommandeUseCase(commandeRepository),
+  exporterCommande: new ExporterCommandeUseCase(
+    commandeRepository,
+    sessionRepository,
+    fileCopier,
+  ),
 
   dossierPicker,
 };
