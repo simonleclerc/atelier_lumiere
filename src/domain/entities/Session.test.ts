@@ -62,4 +62,33 @@ describe("Session (agrégat racine)", () => {
       Session.creer({ ...entreeValide, photoNumeros: [1, 2, 2] }),
     ).toThrow(/dupliqués/);
   });
+
+  it("démarre sans acheteur", () => {
+    const s = Session.creer(entreeValide);
+    expect(s.acheteurs).toHaveLength(0);
+  });
+
+  it("ajouterAcheteur ajoute un acheteur à l'agrégat", () => {
+    const s = Session.creer(entreeValide);
+    const a = s.ajouterAcheteur({ nom: "Martin Dupont" });
+    expect(s.acheteurs).toHaveLength(1);
+    expect(s.acheteurs[0].id).toBe(a.id);
+    expect(s.acheteurs[0].nom).toBe("Martin Dupont");
+  });
+
+  it("ajouterAcheteur refuse un homonyme (trim + case-insensitive)", () => {
+    const s = Session.creer(entreeValide);
+    s.ajouterAcheteur({ nom: "Martin Dupont" });
+    expect(() =>
+      s.ajouterAcheteur({ nom: "  martin dupont  " }),
+    ).toThrow(/déjà inscrit/);
+    expect(s.acheteurs).toHaveLength(1);
+  });
+
+  it("ajouterAcheteur accepte deux Martin distingués", () => {
+    const s = Session.creer(entreeValide);
+    s.ajouterAcheteur({ nom: "Martin Dupont" });
+    s.ajouterAcheteur({ nom: "Martin Blanc" });
+    expect(s.acheteurs).toHaveLength(2);
+  });
 });

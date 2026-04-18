@@ -10,12 +10,14 @@ interface Props {
   creerSession: CreerSessionUseCase;
   listerSessions: ListerSessionsUseCase;
   dossierPicker: DossierPicker;
+  onOuvrirSession: (id: string) => void;
 }
 
 export function SessionsPage({
   creerSession,
   listerSessions,
   dossierPicker,
+  onOuvrirSession,
 }: Props) {
   const [sessions, setSessions] = useState<readonly Session[]>([]);
   const [mode, setMode] = useState<"liste" | "nouveau">("liste");
@@ -39,7 +41,7 @@ export function SessionsPage({
   }, []);
 
   return (
-    <main className="mx-auto flex h-full max-w-3xl flex-col gap-6 p-8">
+    <section className="flex flex-col gap-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Sessions</h1>
         {mode === "liste" && (
@@ -60,7 +62,7 @@ export function SessionsPage({
       )}
 
       {mode === "liste" && (
-        <section className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           {chargement && (
             <p className="text-sm text-muted-foreground">Chargement…</p>
           )}
@@ -75,9 +77,11 @@ export function SessionsPage({
             </p>
           )}
           {sessions.map((s) => (
-            <article
+            <button
               key={s.id}
-              className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4"
+              type="button"
+              onClick={() => onOuvrirSession(s.id)}
+              className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-muted"
             >
               <div className="flex items-baseline justify-between">
                 <h2 className="text-base font-semibold">{s.commanditaire}</h2>
@@ -89,13 +93,13 @@ export function SessionsPage({
                 Référent : {s.referent}
               </p>
               <p className="text-sm">
-                {s.nombrePhotos()} photo{s.nombrePhotos() > 1 ? "s" : ""} détectée
-                {s.nombrePhotos() > 1 ? "s" : ""}
+                {s.nombrePhotos()} photo{s.nombrePhotos() > 1 ? "s" : ""} · {s.acheteurs.length} acheteur
+                {s.acheteurs.length > 1 ? "s" : ""}
               </p>
-            </article>
+            </button>
           ))}
-        </section>
+        </div>
       )}
-    </main>
+    </section>
   );
 }

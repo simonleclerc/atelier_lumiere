@@ -9,6 +9,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App
       creerSession={container.creerSession}
       listerSessions={container.listerSessions}
+      ajouterAcheteurASession={container.ajouterAcheteurASession}
+      trouverSessionParId={container.trouverSessionParId}
       dossierPicker={container.dossierPicker}
     />
   </React.StrictMode>,

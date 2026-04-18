@@ -1,5 +1,7 @@
+import { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
+import { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMemory/InMemoryGrilleTarifaireParDefautProvider";
 import { TauriDossierPicker } from "@/infrastructure/tauri/TauriDossierPicker";
 import { TauriFileSystemScanner } from "@/infrastructure/tauri/TauriFileSystemScanner";
@@ -25,6 +27,10 @@ export const container = {
     grilleParDefaut,
   ),
   listerSessions: new ListerSessionsUseCase(sessionRepository),
+  trouverSessionParId: new TrouverSessionParIdUseCase(sessionRepository),
+  ajouterAcheteurASession: new AjouterAcheteurASessionUseCase(
+    sessionRepository,
+  ),
   dossierPicker,
 };
 

@@ -5,6 +5,7 @@ import {
   readTextFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { Acheteur } from "@/domain/entities/Acheteur";
 import { Photo } from "@/domain/entities/Photo";
 import { Session } from "@/domain/entities/Session";
 import {
@@ -12,6 +13,7 @@ import {
   type SessionRepository,
 } from "@/domain/ports/SessionRepository";
 import { CheminDossier } from "@/domain/value-objects/CheminDossier";
+import { Email } from "@/domain/value-objects/Email";
 import { Format } from "@/domain/value-objects/Format";
 import { GrilleTarifaire } from "@/domain/value-objects/GrilleTarifaire";
 import { Montant } from "@/domain/value-objects/Montant";
@@ -20,16 +22,24 @@ import { parseTypeSession } from "@/domain/value-objects/TypeSession";
 /**
  * Adapter Tauri — persistance JSON dans `AppData/sessions.json`.
  *
- * Limites assumées en V1 : lecture / écriture complète à chaque opération
- * (pas de batch, pas de cache). Pour quelques dizaines de sessions c'est
- * amplement suffisant. Migration vers SQLite (plugin-sql) triviale plus
- * tard parce que le domaine ne sera pas touché.
+ * Les Acheteurs sont persistés DANS le JSON de leur session parce qu'ils
+ * font partie de l'agrégat Session (pattern "persistance par agrégat" :
+ * un agrégat = une transaction = un fichier). Pas de table/fichier
+ * séparé — ce qui serait un mauvais signal, suggérant qu'ils sont un
+ * agrégat autonome.
  */
 const FICHIER = "sessions.json";
 
 interface GrilleJson {
   readonly format: string;
   readonly centimes: number;
+}
+
+interface AcheteurJson {
+  readonly id: string;
+  readonly nom: string;
+  readonly email?: string;
+  readonly telephone?: string;
 }
 
 interface SessionJson {
@@ -42,6 +52,7 @@ interface SessionJson {
   readonly dossierExport: string;
   readonly grilleTarifaire: readonly GrilleJson[];
   readonly photos: readonly number[];
+  readonly acheteurs?: readonly AcheteurJson[];
 }
 
 export class TauriSessionRepository implements SessionRepository {
@@ -98,6 +109,12 @@ function toJson(session: Session): SessionJson {
       .toEntrees()
       .map(([f, m]) => ({ format: f.toDossierName(), centimes: m.centimes })),
     photos: session.photos.map((p) => p.numero),
+    acheteurs: session.acheteurs.map((a) => ({
+      id: a.id,
+      nom: a.nom,
+      email: a.email?.valeur,
+      telephone: a.telephone,
+    })),
   };
 }
 
@@ -116,5 +133,14 @@ function fromJson(raw: SessionJson): Session {
       ),
     ),
     photos: raw.photos.map((n) => new Photo(n)),
+    acheteurs: (raw.acheteurs ?? []).map(
+      (a) =>
+        new Acheteur({
+          id: a.id,
+          nom: a.nom,
+          email: a.email ? new Email(a.email) : undefined,
+          telephone: a.telephone,
+        }),
+    ),
   });
 }
