@@ -20,7 +20,7 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 
 ## Saisie de commande
 
-- [ ] Select avec recherche quand on choisit une photo
+- [ ] Select avec recherche et sélection multiple pour choisir les photos, **en plus** de l'input texte actuel : cmdk/combobox shadcn avec filtre par numéro, cases à cocher, affichage des numéros sélectionnés. Les deux modes de saisie cohabitent (l'input texte reste le plus rapide quand on sait les numéros par cœur, le select aide quand on découvre la liste)
 - [ ] Raccourcis clavier pour ajouter des photos aux commandes : tabulation correcte entre les champs + validation
 - [x] Saisie multi-photos : syntaxe type `1,3,155,176` pour les numéros, avec un seul champ format et un seul champ quantité → ajoute les photos 1, 3, 155, 176 avec le format et la quantité désignés
 
