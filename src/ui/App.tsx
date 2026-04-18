@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SessionsPage } from "@/ui/pages/SessionsPage";
 import { SessionDetailPage } from "@/ui/pages/SessionDetailPage";
 import { CommandePage } from "@/ui/pages/CommandePage";
+import { Toaster } from "@/ui/components/ui/sonner";
 import type { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import type { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
@@ -52,7 +53,9 @@ function App({
   const [vue, setVue] = useState<Vue>({ nom: "liste" });
 
   return (
-    <main className="mx-auto flex h-full max-w-3xl flex-col gap-6 p-8">
+    <>
+      <Toaster position="top-right" richColors />
+      <main className="mx-auto flex h-full max-w-3xl flex-col gap-6 p-8">
       {vue.nom === "liste" && (
         <SessionsPage
           creerSession={creerSession}
@@ -92,7 +95,8 @@ function App({
           }
         />
       )}
-    </main>
+      </main>
+    </>
   );
 }
 

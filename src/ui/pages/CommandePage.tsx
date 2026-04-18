@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
 import type { Commande } from "@/domain/entities/Commande";
 import type { Session } from "@/domain/entities/Session";
@@ -33,7 +34,6 @@ export function CommandePage({
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [exportEnCours, setExportEnCours] = useState(false);
-  const [exportResume, setExportResume] = useState<string | null>(null);
 
   const recharger = useCallback(async () => {
     setChargement(true);
@@ -151,21 +151,24 @@ export function CommandePage({
                 {commande.total().toString()}
               </span>
             </div>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex justify-end">
               <Button
                 onClick={async () => {
                   setExportEnCours(true);
-                  setExportResume(null);
-                  setErreur(null);
                   try {
                     const r = await exporter.execute({ commandeId: commande.id });
-                    setExportResume(
-                      `${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""} exporté${r.fichiersCrees > 1 ? "s" : ""} dans ${session.dossierExport.valeur}`,
-                    );
+                    const mot =
+                      r.fichiersCrees > 1 ? "fichiers exportés" : "fichier exporté";
+                    toast.success(`${r.fichiersCrees} ${mot}`, {
+                      description: session.dossierExport.valeur,
+                      duration: 5000,
+                    });
                   } catch (err) {
-                    setErreur(
-                      err instanceof Error ? err.message : String(err),
-                    );
+                    toast.error("Export échoué", {
+                      description:
+                        err instanceof Error ? err.message : String(err),
+                      duration: 7000,
+                    });
                   } finally {
                     setExportEnCours(false);
                   }
@@ -174,9 +177,6 @@ export function CommandePage({
               >
                 {exportEnCours ? "Export en cours…" : "Exporter vers le dossier"}
               </Button>
-              {exportResume && (
-                <p className="text-xs text-muted-foreground">{exportResume}</p>
-              )}
             </div>
           </div>
         )}
