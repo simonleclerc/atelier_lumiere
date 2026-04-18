@@ -12,6 +12,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       ajouterAcheteurASession={container.ajouterAcheteurASession}
       modifierPrixSession={container.modifierPrixSession}
       trouverSessionParId={container.trouverSessionParId}
+      listerCommandesDeSession={container.listerCommandesDeSession}
+      passerCommande={container.passerCommande}
+      trouverCommandeParId={container.trouverCommandeParId}
+      ajouterLigneACommande={container.ajouterLigneACommande}
+      retirerLigneDeCommande={container.retirerLigneDeCommande}
       dossierPicker={container.dossierPicker}
     />
   </React.StrictMode>,

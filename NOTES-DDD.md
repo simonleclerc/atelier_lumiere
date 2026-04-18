@@ -17,8 +17,8 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 | **Commanditaire** | Champ texte sur Session | Lieu/compagnie/production qui a commandé le shoot. Pas d'entité réutilisable (YAGNI). |
 | **Référent** | Champ texte sur Session | Contact côté commanditaire. |
 | **Acheteur** | Entité fille de Session | Particulier/pro qui achète des tirages. Rattaché à une session, pas réutilisable cross-session. |
-| **Commande** | Agrégat racine (à venir, slice 3b) | `sessionId` + `acheteurId` + lignes. Cycle de vie distinct de la Session. |
-| **LigneCommande** | VO fille de Commande (à venir) | `{ photoNumero, format, quantite }`. |
+| **Commande** | Agrégat racine | `sessionId` + `acheteurId` + lignes. Cycle de vie distinct de la Session (arrive après le shoot). |
+| **LigneCommande** | Entité fille de Commande | `{ id, photoNumero, format, quantite, montantUnitaire }`. Montant snapshot figé à la création. |
 | **Format** | VO | Catalogue fermé : `15x23`, `20x30`, `30x45`, `Numerique`. |
 | **Montant** | VO | Centimes d'euros (jamais de float pour de l'argent). |
 | **GrilleTarifaire** | VO dans Session | Mapping Format → Montant, ajustable par session via `Session.modifierPrix`. |
@@ -38,12 +38,12 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 │  └── GrilleTarifaire (VO, remplaçable via modifierPrix)  │
 └──────────────────────────────────────────────────────────┘
 
-(slice 3b à venir :)
 ┌──────────────────────────────────────────────────────────┐
 │ Commande (agrégat racine)                                │
 │  ├── sessionId (référence par ID)                        │
-│  ├── acheteurId (référence par ID, acheteur de la même session) │
-│  └── LigneCommande[] (VO filles)                         │
+│  ├── acheteurId (référence par ID, acheteur de la session) │
+│  └── LigneCommande[] (entités filles, identité = id)     │
+│       └─ montantUnitaire SNAPSHOT (figé à la création)   │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -214,6 +214,63 @@ Modifier la grille d'une session plus tard **n'impactera pas** les commandes dé
 
 ---
 
+## Slice 3b — Commande (agrégat séparé + cross-aggregate invariants)
+
+**Valeur métier** : le photographe saisit une commande pour un acheteur d'une session : liste de lignes `photo × format × quantité` avec prix unitaire visible et total calculé.
+
+**Livrables** :
+- Entité fille `LigneCommande` (id, photoNumero, format, quantité, **montantUnitaire snapshot**, méthode `total()`)
+- Agrégat racine `Commande` (sessionId, acheteurId, dateCreation, `_lignes` mutable, méthodes `ajouterLigne`/`retirerLigne`/`total`/`nombreTirages`)
+- Port `CommandeRepository` + erreurs `CommandeIntrouvable`, `LigneCommandeIntrouvable`
+- Use cases `PasserCommandeUseCase`, `AjouterLigneACommandeUseCase`, `RetirerLigneDeCommandeUseCase`, `ListerCommandesDeSessionUseCase`, `TrouverCommandeParIdUseCase`
+- Adapter `TauriCommandeRepository` → `commandes.json` séparé de `sessions.json`
+- UI : `CommandePage` (saisie + affichage des lignes et total), intégration dans `SessionDetailPage` (bouton « Passer une commande » + liste des commandes par acheteur), 3ᵉ vue dans `App.tsx`
+
+### Patterns DDD introduits
+
+#### Agrégats séparés avec références par ID
+
+**Commande** est un agrégat à part, pas une entité fille de Session — parce que leurs **cycles de vie divergent**. Une session est créée au shoot et figée peu après ; les commandes arrivent dans les semaines/mois qui suivent.
+
+La Commande ne connaît que des **IDs** : `sessionId: string`, `acheteurId: string`. **Pas** d'objet `Session` embarqué, **pas** d'objet `Acheteur` embarqué. Règle Vernon : « Reference Other Aggregates By Identity ».
+
+Conséquence : l'invariant « cet acheteur existe dans cette session » ne peut **pas** être vérifié dans le constructeur de `Commande` (elle n'a pas la session sous la main). Il est vérifié dans le **use case** `PasserCommandeUseCase`, qui charge la Session et inspecte ses acheteurs.
+
+#### Cross-aggregate invariant dans le use case
+
+Deux règles cross-aggregate sont implémentées :
+
+| Règle | Use case | Fichier |
+|---|---|---|
+| L'acheteur appartient bien à la session | `PasserCommandeUseCase` | `src/domain/usecases/PasserCommande.ts` |
+| La photo référencée existe dans la session | `AjouterLigneACommandeUseCase` | `src/domain/usecases/AjouterLigneACommande.ts` |
+
+Règle Vernon : **cohérence immédiate intra-agrégat, cohérence éventuelle inter-agrégats.** On vérifie au moment de la mutation — pas de garantie globale en permanence, ce qui serait impossible sans verrous partagés entre agrégats.
+
+#### Pattern Snapshot
+
+**Le cas d'école** qui a motivé tout le soin porté à `GrilleTarifaire` depuis la slice 3a.
+
+`LigneCommande.montantUnitaire` est **capturé au moment où la ligne est créée**, depuis `session.grilleTarifaire.prixPour(format)`. Une fois la ligne créée, son prix ne bouge plus — même si le copain modifie la grille de la session la semaine suivante.
+
+Le test `AjouterLigneACommande.test.ts::fige le prix à la création même si la grille change plus tard (snapshot)` démontre ça en dur.
+
+**Piège évité** : tenir un pointeur vers la grille ou la session depuis la ligne. Toute modification de la grille repeindrait les factures passées, ce qui serait un bug fonctionnel très sérieux (erreur fiscale en aval).
+
+#### Entité fille avec identité propre
+
+`LigneCommande` a un **id stable** (UUID) distinct de son contenu. Deux lignes `{ photo 145, 20x30, quantité 1 }` dans la même commande sont des entités distinctes si elles ont des ids différents. Ça permet de référencer une ligne précise pour la retirer (`Commande.retirerLigne(ligneId)`) sans collision.
+
+Contrairement à un VO (identité par valeur), l'entité fille est la bonne réponse quand on veut pouvoir adresser précisément un élément de la collection.
+
+#### Méthode de calcul dans l'agrégat
+
+`Commande.total()` et `Commande.nombreTirages()` sont des méthodes de l'agrégat qui **dérivent** leur résultat de l'état interne (`_lignes`). Ça évite de recalculer ça dans l'UI ou de stocker un total redondant dans le JSON (duplication de source de vérité).
+
+**Règle** : toute information dérivable d'un agrégat se calcule via une méthode de cet agrégat. Pas de champs « total stocké » — sauf si on a besoin de les indexer pour des raisons de perfs.
+
+---
+
 # Points d'attention récurrents
 
 Les **3 frictions Clean Archi** sur lesquelles un dev React débute en DDD se casse les dents. À relire régulièrement.
@@ -258,7 +315,6 @@ Les sources citées dans les commentaires du code, à picorer en fonction des qu
 
 # Roadmap restante
 
-- **Slice 3b — Commande** : agrégat racine séparé, `LigneCommande (photo, format, quantité)`, invariants cross-aggregate (« photo existe dans session », « acheteur appartient à cette session »), UI de saisie depuis un acheteur de `SessionDetailPage`, totaux visibles (basés sur la grille de la session).
 - **Slice 4 — Export physique** : use case `ExporterCommande` + port `FileCopier`. Duplication en `{acheteur}_{photo}_{i}.jpg`, traitement spécial du format `Numerique` (sous-dossier dédié).
 - **Slice 5 — Facture PDF** : nouveau port `PdfRenderer`, choix de lib à trancher (`pdf-lib` vs `@react-pdf/renderer`).
 

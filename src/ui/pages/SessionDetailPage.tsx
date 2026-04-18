@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/ui/components/ui/button";
 import { GrilleTarifaireEditor } from "@/ui/components/GrilleTarifaireEditor";
 import { NouvelAcheteurForm } from "@/ui/components/NouvelAcheteurForm";
+import type { Acheteur } from "@/domain/entities/Acheteur";
+import type { Commande } from "@/domain/entities/Commande";
 import type { Session } from "@/domain/entities/Session";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
+import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
+import type { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 
 interface Props {
@@ -12,7 +16,10 @@ interface Props {
   ajouterAcheteur: AjouterAcheteurASessionUseCase;
   modifierPrix: ModifierPrixSessionUseCase;
   trouverSession: TrouverSessionParIdUseCase;
+  listerCommandes: ListerCommandesDeSessionUseCase;
+  passerCommande: PasserCommandeUseCase;
   onRetour: () => void;
+  onOuvrirCommande: (commandeId: string) => void;
 }
 
 export function SessionDetailPage({
@@ -20,9 +27,13 @@ export function SessionDetailPage({
   ajouterAcheteur,
   modifierPrix,
   trouverSession,
+  listerCommandes,
+  passerCommande,
   onRetour,
+  onOuvrirCommande,
 }: Props) {
   const [session, setSession] = useState<Session | null>(null);
+  const [commandes, setCommandes] = useState<readonly Commande[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [formOuvert, setFormOuvert] = useState(false);
@@ -31,13 +42,18 @@ export function SessionDetailPage({
     setChargement(true);
     setErreur(null);
     try {
-      setSession(await trouverSession.execute(sessionId));
+      const [s, cmds] = await Promise.all([
+        trouverSession.execute(sessionId),
+        listerCommandes.execute(sessionId),
+      ]);
+      setSession(s);
+      setCommandes(cmds);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : String(err));
     } finally {
       setChargement(false);
     }
-  }, [sessionId, trouverSession]);
+  }, [sessionId, trouverSession, listerCommandes]);
 
   useEffect(() => {
     recharger();
@@ -112,24 +128,97 @@ export function SessionDetailPage({
           </p>
         )}
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {session.acheteurs.map((a) => (
-            <article
+            <AcheteurCard
               key={a.id}
-              className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4"
-            >
-              <h3 className="text-base font-semibold">{a.nom}</h3>
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                {a.email && <span>{a.email.valeur}</span>}
-                {a.telephone && <span>{a.telephone}</span>}
-                {!a.email && !a.telephone && (
-                  <span>aucun contact renseigné</span>
-                )}
-              </div>
-            </article>
+              acheteur={a}
+              commandes={commandes.filter((c) => c.acheteurId === a.id)}
+              sessionId={session.id}
+              passerCommande={passerCommande}
+              onOuvrirCommande={onOuvrirCommande}
+              onErreur={setErreur}
+            />
           ))}
         </div>
       </section>
     </section>
+  );
+}
+
+function AcheteurCard({
+  acheteur,
+  commandes,
+  sessionId,
+  passerCommande,
+  onOuvrirCommande,
+  onErreur,
+}: {
+  acheteur: Acheteur;
+  commandes: readonly Commande[];
+  sessionId: string;
+  passerCommande: PasserCommandeUseCase;
+  onOuvrirCommande: (id: string) => void;
+  onErreur: (message: string) => void;
+}) {
+  const [enCours, setEnCours] = useState(false);
+
+  async function creerCommande(): Promise<void> {
+    setEnCours(true);
+    try {
+      const c = await passerCommande.execute({
+        sessionId,
+        acheteurId: acheteur.id,
+      });
+      onOuvrirCommande(c.id);
+    } catch (err) {
+      onErreur(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEnCours(false);
+    }
+  }
+
+  return (
+    <article className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+      <header className="flex items-baseline justify-between gap-4">
+        <div className="flex flex-col">
+          <h3 className="text-base font-semibold">{acheteur.nom}</h3>
+          <div className="flex gap-3 text-xs text-muted-foreground">
+            {acheteur.email && <span>{acheteur.email.valeur}</span>}
+            {acheteur.telephone && <span>{acheteur.telephone}</span>}
+            {!acheteur.email && !acheteur.telephone && (
+              <span>aucun contact</span>
+            )}
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          onClick={creerCommande}
+          disabled={enCours}
+        >
+          {enCours ? "…" : "Passer une commande"}
+        </Button>
+      </header>
+
+      {commandes.length > 0 && (
+        <ul className="flex flex-col gap-1 border-t border-border/50 pt-2">
+          {commandes.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                onClick={() => onOuvrirCommande(c.id)}
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
+              >
+                <span className="text-muted-foreground">
+                  {c.dateCreation.toLocaleDateString("fr-FR")} ·{" "}
+                  {c.lignes.length} ligne{c.lignes.length > 1 ? "s" : ""}
+                </span>
+                <span className="font-medium">{c.total().toString()}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
   );
 }
