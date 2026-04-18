@@ -21,20 +21,21 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 
 - [ ] Select avec recherche quand on choisit une photo
 - [ ] Raccourcis clavier pour ajouter des photos aux commandes : tabulation correcte entre les champs + validation
-- [ ] Saisie multi-photos : syntaxe type `1,3,155,176` pour les numéros, avec un seul champ format et un seul champ quantité → ajoute les photos 1, 3, 155, 176 avec le format et la quantité désignés
+- [x] Saisie multi-photos : syntaxe type `1,3,155,176` pour les numéros, avec un seul champ format et un seul champ quantité → ajoute les photos 1, 3, 155, 176 avec le format et la quantité désignés
 
 ## Récap & reporting
 
-- [ ] Écran de récap de session : chiffre d'affaires total, total de photos, nombre de clients, détail par client (nom, nombre de photos, prix total)
-- [ ] Tri des acheteurs : date d'ajout, ordre alphabétique, prix total, nombre de photos
+- [x] Écran de récap de session : chiffre d'affaires total, total de photos, nombre de clients, détail par client (nom, nombre de photos, prix total)
+- [x] Tri des acheteurs : date d'ajout, ordre alphabétique, prix total, nombre de photos
 
 ## Feedback visuel
 
-- [ ] Toasts de succès et d'erreur (sonner déjà installé)
+- [x] Toasts de succès et d'erreur (sonner déjà installé)
 - [ ] Loading / barre de progression pendant un export complet de session
 
 ## Robustesse & sécurité des données
 
-- [ ] Confirmation avant suppression (partout)
+- [x] Confirmation avant suppression (partout) <!-- fait pour retirer une ligne de commande ; reste à étendre quand on ajoutera d'autres suppressions -->
+
 - [ ] Pas de delete physique : soft delete uniquement
 - [ ] Backup / export des données de l'app (pas juste les photos) + import pour restaurer

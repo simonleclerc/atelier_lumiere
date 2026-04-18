@@ -122,16 +122,22 @@ export function CommandePage({
             <Button
               variant="ghost"
               onClick={async () => {
+                const confirme = window.confirm(
+                  `Retirer la ligne "photo n°${l.photoNumero} · ${l.format.toDossierName()} · ×${l.quantite}" ?`,
+                );
+                if (!confirme) return;
                 try {
                   await retirerLigne.execute({
                     commandeId: commande.id,
                     ligneId: l.id,
                   });
+                  toast.success("Ligne retirée");
                   recharger();
                 } catch (err) {
-                  setErreur(
-                    err instanceof Error ? err.message : String(err),
-                  );
+                  toast.error("Retrait impossible", {
+                    description:
+                      err instanceof Error ? err.message : String(err),
+                  });
                 }
               }}
             >
@@ -196,29 +202,44 @@ function AjouterLigneForm({
   ajouterLigne: AjouterLigneACommandeUseCase;
   onAjoute: () => void;
 }) {
-  const [photoNumero, setPhotoNumero] = useState<string>(
-    session.photos[0]?.numero.toString() ?? "",
-  );
+  const [photosSaisie, setPhotosSaisie] = useState<string>("");
   const [format, setFormat] = useState<string>(Format.TOUS[0].toDossierName());
   const [quantite, setQuantite] = useState<string>("1");
-  const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
 
   async function soumettre(e: React.FormEvent): Promise<void> {
     e.preventDefault();
-    setErreur(null);
     setEnCours(true);
     try {
-      await ajouterLigne.execute({
-        commandeId,
-        photoNumero: Number(photoNumero),
-        format,
-        quantite: Number(quantite),
-      });
-      setQuantite("1");
+      const numeros = parserNumerosPhotos(photosSaisie);
+      if (numeros.length === 0) {
+        throw new Error(
+          "Indique au moins un numéro de photo (ex : 145 ou 1,3,155).",
+        );
+      }
+      const quantiteNum = Number(quantite);
+      let ajoutees = 0;
+      for (const n of numeros) {
+        await ajouterLigne.execute({
+          commandeId,
+          photoNumero: n,
+          format,
+          quantite: quantiteNum,
+        });
+        ajoutees += 1;
+      }
+      toast.success(
+        `${ajoutees} ligne${ajoutees > 1 ? "s" : ""} ajoutée${ajoutees > 1 ? "s" : ""}`,
+        {
+          description: `Format ${format} · quantité ${quantiteNum} par photo`,
+        },
+      );
+      setPhotosSaisie("");
       onAjoute();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : String(err));
+      toast.error("Ajout impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setEnCours(false);
     }
@@ -231,19 +252,16 @@ function AjouterLigneForm({
     >
       <h3 className="text-base font-semibold">Ajouter une ligne</h3>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          Photo
-          <select
-            value={photoNumero}
-            onChange={(e) => setPhotoNumero(e.currentTarget.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {session.photos.map((p) => (
-              <option key={p.numero} value={p.numero}>
-                n°{p.numero}
-              </option>
-            ))}
-          </select>
+        <label className="flex flex-1 flex-col gap-1 text-sm">
+          Photo(s)
+          <input
+            type="text"
+            value={photosSaisie}
+            onChange={(e) => setPhotosSaisie(e.currentTarget.value)}
+            placeholder="145 ou 1,3,155"
+            required
+            className="min-w-[140px] rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Format
@@ -277,11 +295,6 @@ function AjouterLigneForm({
           {enCours ? "…" : "Ajouter"}
         </Button>
       </div>
-      {erreur && (
-        <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">
-          {erreur}
-        </p>
-      )}
       {session.photos.length === 0 && (
         <p className="text-xs text-muted-foreground">
           Aucune photo détectée dans le dossier source de cette session.
@@ -289,4 +302,30 @@ function AjouterLigneForm({
       )}
     </form>
   );
+}
+
+/**
+ * Accepte "145", "1,3,155", "  7 , 12 ,3  ". Rejette tout ce qui n'est pas
+ * entier ≥ 1. Dédoublonne en préservant l'ordre de saisie.
+ */
+function parserNumerosPhotos(saisie: string): number[] {
+  const morceaux = saisie
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const numeros: number[] = [];
+  const vus = new Set<number>();
+  for (const m of morceaux) {
+    const n = Number(m);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new Error(
+        `"${m}" n'est pas un numéro de photo valide (entier ≥ 1 attendu).`,
+      );
+    }
+    if (!vus.has(n)) {
+      vus.add(n);
+      numeros.push(n);
+    }
+  }
+  return numeros;
 }

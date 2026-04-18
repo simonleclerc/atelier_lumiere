@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
 import type { Session } from "@/domain/entities/Session";
 import type { Format } from "@/domain/value-objects/Format";
@@ -53,13 +54,11 @@ function LignePrix({
   const initialEuros = (montant.centimes / 100).toString();
   const [euros, setEuros] = useState(initialEuros);
   const [enCours, setEnCours] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
 
   const aChange = euros !== initialEuros;
 
   async function enregistrer(e: React.FormEvent): Promise<void> {
     e.preventDefault();
-    setErreur(null);
     setEnCours(true);
     try {
       const valNum = Number(euros.replace(",", "."));
@@ -71,9 +70,14 @@ function LignePrix({
         format: format.toDossierName(),
         centimes: Math.round(valNum * 100),
       });
+      toast.success(`Prix ${format.toDossierName()} mis à jour`, {
+        description: `${valNum.toFixed(2)} €`,
+      });
       onMaj();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : String(err));
+      toast.error(`Mise à jour du prix ${format.toDossierName()} impossible`, {
+        description: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setEnCours(false);
     }
@@ -109,9 +113,6 @@ function LignePrix({
           {enCours ? "…" : aChange ? "Enregistrer" : "À jour"}
         </Button>
       </div>
-      {erreur && (
-        <p className="pl-[108px] text-xs text-destructive">{erreur}</p>
-      )}
     </form>
   );
 }

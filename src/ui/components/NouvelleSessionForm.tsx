@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
 import type { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
@@ -23,7 +24,6 @@ export function NouvelleSessionForm({
   const [type, setType] = useState<(typeof TYPES_SESSION)[number]>("Spectacle");
   const [dossierSource, setDossierSource] = useState("");
   const [dossierExport, setDossierExport] = useState("");
-  const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
 
   async function choisir(
@@ -36,10 +36,9 @@ export function NouvelleSessionForm({
 
   async function soumettre(e: React.FormEvent): Promise<void> {
     e.preventDefault();
-    setErreur(null);
     setEnCours(true);
     try {
-      await creerSession.execute({
+      const session = await creerSession.execute({
         commanditaire,
         referent,
         date: new Date(date),
@@ -47,9 +46,14 @@ export function NouvelleSessionForm({
         dossierSource,
         dossierExport,
       });
+      toast.success("Session créée", {
+        description: `${session.commanditaire} · ${session.nombrePhotos()} photo${session.nombrePhotos() > 1 ? "s" : ""} détectée${session.nombrePhotos() > 1 ? "s" : ""}`,
+      });
       onCree();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : String(err));
+      toast.error("Création impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setEnCours(false);
     }
@@ -145,12 +149,6 @@ export function NouvelleSessionForm({
           </span>
         </div>
       </div>
-
-      {erreur && (
-        <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">
-          {erreur}
-        </p>
-      )}
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onAnnuler}>

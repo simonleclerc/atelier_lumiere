@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 
@@ -18,23 +19,24 @@ export function NouvelAcheteurForm({
   const [nom, setNom] = useState("");
   const [email, setEmail] = useState("");
   const [telephone, setTelephone] = useState("");
-  const [erreur, setErreur] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
 
   async function soumettre(e: React.FormEvent): Promise<void> {
     e.preventDefault();
-    setErreur(null);
     setEnCours(true);
     try {
-      await ajouterAcheteur.execute({
+      const acheteur = await ajouterAcheteur.execute({
         sessionId,
         nom,
         email: email || undefined,
         telephone: telephone || undefined,
       });
+      toast.success("Acheteur inscrit", { description: acheteur.nom });
       onAjoute();
     } catch (err) {
-      setErreur(err instanceof Error ? err.message : String(err));
+      toast.error("Inscription impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setEnCours(false);
     }
@@ -80,12 +82,6 @@ export function NouvelAcheteurForm({
           className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </label>
-
-      {erreur && (
-        <p className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">
-          {erreur}
-        </p>
-      )}
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onAnnuler}>
