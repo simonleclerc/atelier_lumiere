@@ -26,6 +26,10 @@ class InMemorySessionRepository implements SessionRepository {
   async findAll(): Promise<readonly Session[]> {
     return this.saved;
   }
+  async replaceAll(sessions: readonly Session[]): Promise<void> {
+    this.saved.length = 0;
+    this.saved.push(...sessions);
+  }
 }
 
 class FakeScanner implements FileSystemScanner {

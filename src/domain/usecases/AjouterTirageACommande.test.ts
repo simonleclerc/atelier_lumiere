@@ -59,6 +59,10 @@ class InMemorySessionRepo implements SessionRepository {
   async findAll(): Promise<readonly Session[]> {
     return Array.from(this.map.values());
   }
+  async replaceAll(sessions: readonly Session[]): Promise<void> {
+    this.map.clear();
+    sessions.forEach((s) => this.map.set(s.id, s));
+  }
 }
 
 class InMemoryCommandeRepo implements CommandeRepository {
@@ -70,6 +74,9 @@ class InMemoryCommandeRepo implements CommandeRepository {
     const c = this.map.get(id);
     if (!c) throw new CommandeIntrouvable(id);
     return c;
+  }
+  async findAll(): Promise<readonly Commande[]> {
+    return Array.from(this.map.values());
   }
   async findBySessionId(sessionId: string): Promise<readonly Commande[]> {
     return Array.from(this.map.values()).filter(
@@ -85,6 +92,10 @@ class InMemoryCommandeRepo implements CommandeRepository {
         (c) => c.sessionId === sessionId && c.acheteurId === acheteurId,
       ) ?? null
     );
+  }
+  async replaceAll(commandes: readonly Commande[]): Promise<void> {
+    this.map.clear();
+    commandes.forEach((c) => this.map.set(c.id, c));
   }
   async delete(id: string): Promise<void> {
     this.map.delete(id);

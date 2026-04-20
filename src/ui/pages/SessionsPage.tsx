@@ -4,26 +4,36 @@ import { Button } from "@/ui/components/ui/button";
 import { SessionForm } from "@/ui/components/SessionForm";
 import type { Session } from "@/domain/entities/Session";
 import type { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
+import type { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
+import type { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
 import type { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
+import type { SauvegardeFichierPicker } from "@/ui/ports/SauvegardeFichierPicker";
 
 interface Props {
   creerSession: CreerSessionUseCase;
   listerSessions: ListerSessionsUseCase;
+  exporterSauvegarde: ExporterSauvegardeUseCase;
+  importerSauvegarde: ImporterSauvegardeUseCase;
   dossierPicker: DossierPicker;
+  sauvegardeFichierPicker: SauvegardeFichierPicker;
   onOuvrirSession: (id: string) => void;
 }
 
 export function SessionsPage({
   creerSession,
   listerSessions,
+  exporterSauvegarde,
+  importerSauvegarde,
   dossierPicker,
+  sauvegardeFichierPicker,
   onOuvrirSession,
 }: Props) {
   const [sessions, setSessions] = useState<readonly Session[]>([]);
   const [mode, setMode] = useState<"liste" | "nouveau">("liste");
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [sauvegardeEnCours, setSauvegardeEnCours] = useState(false);
 
   async function recharger(): Promise<void> {
     setChargement(true);
@@ -41,13 +51,71 @@ export function SessionsPage({
     recharger();
   }, []);
 
+  async function exporter(): Promise<void> {
+    const defaut = `atelier-lumiere-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`;
+    const chemin = await sauvegardeFichierPicker.choisirPourExport(defaut);
+    if (!chemin) return;
+    setSauvegardeEnCours(true);
+    try {
+      const r = await exporterSauvegarde.execute(chemin);
+      toast.success("Sauvegarde exportée", {
+        description: `${r.nbSessions} session${r.nbSessions > 1 ? "s" : ""} · ${r.nbCommandes} commande${r.nbCommandes > 1 ? "s" : ""} → ${chemin}`,
+      });
+    } catch (err) {
+      toast.error("Export échoué", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSauvegardeEnCours(false);
+    }
+  }
+
+  async function importer(): Promise<void> {
+    const chemin = await sauvegardeFichierPicker.choisirPourImport();
+    if (!chemin) return;
+    const confirme = window.confirm(
+      "Cela va REMPLACER toutes tes sessions et commandes actuelles par celles du fichier choisi.\n\nContinuer ?",
+    );
+    if (!confirme) return;
+    setSauvegardeEnCours(true);
+    try {
+      const r = await importerSauvegarde.execute(chemin);
+      toast.success("Sauvegarde restaurée", {
+        description: `${r.nbSessions} session${r.nbSessions > 1 ? "s" : ""} · ${r.nbCommandes} commande${r.nbCommandes > 1 ? "s" : ""} importée${r.nbSessions + r.nbCommandes > 1 ? "s" : ""}`,
+      });
+      recharger();
+    } catch (err) {
+      toast.error("Import échoué", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSauvegardeEnCours(false);
+    }
+  }
+
   return (
     <section className="flex flex-col gap-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Sessions</h1>
-        {mode === "liste" && (
-          <Button onClick={() => setMode("nouveau")}>Nouvelle session</Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={importer}
+            disabled={sauvegardeEnCours}
+          >
+            Importer
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={exporter}
+            disabled={sauvegardeEnCours}
+          >
+            Sauvegarder
+          </Button>
+          {mode === "liste" && (
+            <Button onClick={() => setMode("nouveau")}>Nouvelle session</Button>
+          )}
+        </div>
       </header>
 
       {mode === "nouveau" && (

@@ -12,7 +12,10 @@ import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCo
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
+import type { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
+import type { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
+import type { SauvegardeFichierPicker } from "@/ui/ports/SauvegardeFichierPicker";
 import { Toaster } from "@/ui/components/ui/sonner";
 
 interface AppProps {
@@ -27,7 +30,10 @@ interface AppProps {
   ajouterTirageACommande: AjouterTirageACommandeUseCase;
   retirerTirageDeCommande: RetirerTirageDeCommandeUseCase;
   exporterCommande: ExporterCommandeUseCase;
+  exporterSauvegarde: ExporterSauvegardeUseCase;
+  importerSauvegarde: ImporterSauvegardeUseCase;
   dossierPicker: DossierPicker;
+  sauvegardeFichierPicker: SauvegardeFichierPicker;
 }
 
 type Vue = { nom: "liste" } | { nom: "detail"; sessionId: string };
@@ -44,7 +50,10 @@ function App({
   ajouterTirageACommande,
   retirerTirageDeCommande,
   exporterCommande,
+  exporterSauvegarde,
+  importerSauvegarde,
   dossierPicker,
+  sauvegardeFichierPicker,
 }: AppProps) {
   const [vue, setVue] = useState<Vue>({ nom: "liste" });
 
@@ -56,7 +65,10 @@ function App({
           <SessionsPage
             creerSession={creerSession}
             listerSessions={listerSessions}
+            exporterSauvegarde={exporterSauvegarde}
+            importerSauvegarde={importerSauvegarde}
             dossierPicker={dossierPicker}
+            sauvegardeFichierPicker={sauvegardeFichierPicker}
             onOuvrirSession={(sessionId) => setVue({ nom: "detail", sessionId })}
           />
         )}

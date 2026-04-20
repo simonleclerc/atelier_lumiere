@@ -18,7 +18,10 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       ajouterTirageACommande={container.ajouterTirageACommande}
       retirerTirageDeCommande={container.retirerTirageDeCommande}
       exporterCommande={container.exporterCommande}
+      exporterSauvegarde={container.exporterSauvegarde}
+      importerSauvegarde={container.importerSauvegarde}
       dossierPicker={container.dossierPicker}
+      sauvegardeFichierPicker={container.sauvegardeFichierPicker}
     />
   </React.StrictMode>,
 );

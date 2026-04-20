@@ -2,6 +2,8 @@ import { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteu
 import { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
+import { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
+import { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
 import { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
@@ -15,6 +17,8 @@ import { TauriCommandeRepository } from "@/infrastructure/tauri/TauriCommandeRep
 import { TauriDossierPicker } from "@/infrastructure/tauri/TauriDossierPicker";
 import { TauriFileCopier } from "@/infrastructure/tauri/TauriFileCopier";
 import { TauriFileSystemScanner } from "@/infrastructure/tauri/TauriFileSystemScanner";
+import { TauriSauvegardeFichierIO } from "@/infrastructure/tauri/TauriSauvegardeFichierIO";
+import { TauriSauvegardeFichierPicker } from "@/infrastructure/tauri/TauriSauvegardeFichierPicker";
 import { TauriSessionRepository } from "@/infrastructure/tauri/TauriSessionRepository";
 
 /**
@@ -25,8 +29,10 @@ const sessionRepository = new TauriSessionRepository();
 const commandeRepository = new TauriCommandeRepository();
 const fileSystemScanner = new TauriFileSystemScanner();
 const fileCopier = new TauriFileCopier();
+const sauvegardeFichierIO = new TauriSauvegardeFichierIO();
 const grilleParDefaut = new InMemoryGrilleTarifaireParDefautProvider();
 const dossierPicker = new TauriDossierPicker();
+const sauvegardeFichierPicker = new TauriSauvegardeFichierPicker();
 
 export const container = {
   creerSession: new CreerSessionUseCase(
@@ -60,7 +66,19 @@ export const container = {
   ),
   supprimerCommande: new SupprimerCommandeUseCase(commandeRepository),
 
+  exporterSauvegarde: new ExporterSauvegardeUseCase(
+    sessionRepository,
+    commandeRepository,
+    sauvegardeFichierIO,
+  ),
+  importerSauvegarde: new ImporterSauvegardeUseCase(
+    sessionRepository,
+    commandeRepository,
+    sauvegardeFichierIO,
+  ),
+
   dossierPicker,
+  sauvegardeFichierPicker,
 };
 
 export type Container = typeof container;

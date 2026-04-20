@@ -19,6 +19,7 @@ export class CommandeIntrouvable extends Error {
 export interface CommandeRepository {
   save(commande: Commande): Promise<void>;
   findById(id: string): Promise<Commande>;
+  findAll(): Promise<readonly Commande[]>;
   findBySessionId(sessionId: string): Promise<readonly Commande[]>;
   /**
    * Récupère la commande du couple (session, acheteur) si elle existe.
@@ -33,4 +34,8 @@ export interface CommandeRepository {
    * Supprime la commande ; ne lève pas si l'id n'existe pas (idempotent).
    */
   delete(id: string): Promise<void>;
+  /**
+   * Remplace TOUTES les commandes stockées. Utilisé par `ImporterSauvegarde`.
+   */
+  replaceAll(commandes: readonly Commande[]): Promise<void>;
 }

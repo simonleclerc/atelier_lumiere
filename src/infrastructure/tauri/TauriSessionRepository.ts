@@ -78,6 +78,14 @@ export class TauriSessionRepository implements SessionRepository {
     return raws.map(fromJson);
   }
 
+  async replaceAll(sessions: readonly Session[]): Promise<void> {
+    await this.ensureAppDir();
+    const raws = sessions.map(toJson);
+    await writeTextFile(FICHIER, JSON.stringify(raws, null, 2), {
+      baseDir: BaseDirectory.AppData,
+    });
+  }
+
   private async ensureAppDir(): Promise<void> {
     const ok = await exists("", { baseDir: BaseDirectory.AppData });
     if (!ok) {

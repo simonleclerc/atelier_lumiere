@@ -39,4 +39,4 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 - [x] Confirmation avant suppression (partout) <!-- fait pour retirer une ligne de commande ; reste à étendre quand on ajoutera d'autres suppressions -->
 
 - [ ] Pas de delete physique : soft delete uniquement
-- [ ] Backup / export des données de l'app (pas juste les photos) + import pour restaurer
+- [x] Backup / export des données de l'app (pas juste les photos) + import pour restaurer

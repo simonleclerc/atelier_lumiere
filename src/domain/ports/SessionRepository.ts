@@ -23,4 +23,11 @@ export interface SessionRepository {
   save(session: Session): Promise<void>;
   findById(id: string): Promise<Session>;
   findAll(): Promise<readonly Session[]>;
+  /**
+   * Remplace TOUTES les sessions stockées par celles passées en argument.
+   * Utilisé exclusivement par `ImporterSauvegarde`. Implémentation
+   * atomique côté infra (écrire tout en une fois, pas un delete puis
+   * saves multiples).
+   */
+  replaceAll(sessions: readonly Session[]): Promise<void>;
 }

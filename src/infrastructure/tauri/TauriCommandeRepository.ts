@@ -61,6 +61,11 @@ export class TauriCommandeRepository implements CommandeRepository {
     return fromJson(trouvee);
   }
 
+  async findAll(): Promise<readonly Commande[]> {
+    const raws = await this.loadRaw();
+    return raws.map(fromJson);
+  }
+
   async findBySessionId(sessionId: string): Promise<readonly Commande[]> {
     const raws = await this.loadRaw();
     return raws.filter((r) => r.sessionId === sessionId).map(fromJson);
@@ -87,6 +92,19 @@ export class TauriCommandeRepository implements CommandeRepository {
       return;
     }
     await writeTextFile(FICHIER, JSON.stringify(filtered, null, 2), {
+      baseDir: BaseDirectory.AppData,
+    });
+  }
+
+  async replaceAll(commandes: readonly Commande[]): Promise<void> {
+    await this.ensureAppDir();
+    if (commandes.length === 0) {
+      const present = await exists(FICHIER, { baseDir: BaseDirectory.AppData });
+      if (present) await remove(FICHIER, { baseDir: BaseDirectory.AppData });
+      return;
+    }
+    const raws = commandes.map(toJson);
+    await writeTextFile(FICHIER, JSON.stringify(raws, null, 2), {
       baseDir: BaseDirectory.AppData,
     });
   }

@@ -318,6 +318,46 @@ Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs mé
 
 ---
 
+## Slice bonus — Backup / restore
+
+**Valeur métier** : c'est un outil local. Sans backup, un crash disque ou un changement de Mac fait perdre tout le travail. Bouton « Sauvegarder » et « Importer » sur la liste des sessions.
+
+**Livrables** :
+- Port domaine `SauvegardeFichierIO` (lire/écrire un fichier texte à un chemin absolu) + erreur `SauvegardeIllisible`
+- Module `SauvegardeFormat` : schéma JSON **versionné** et **distinct** des schémas d'adapters, fonctions pures `serialiser` / `desserialiser` avec validation stricte
+- Use cases `ExporterSauvegardeUseCase` (findAll × 2 + serialiser + ecrire) et `ImporterSauvegardeUseCase` (lire + desserialiser + replaceAll × 2)
+- Extensions de ports : `SessionRepository.replaceAll`, `CommandeRepository.findAll` + `replaceAll`
+- Adapter `TauriSauvegardeFichierIO` (lit/écrit hors d'AppData)
+- Port UI `SauvegardeFichierPicker` + adapter Tauri (`save` et `open` de `plugin-dialog` avec filtre `*.json`)
+- UI : boutons « Sauvegarder » et « Importer » en header de `SessionsPage`, confirmation `window.confirm` avant import (destructif)
+
+### Patterns DDD introduits
+
+#### Schéma d'export versionné, indépendant des schémas d'adapter
+
+Le format du fichier backup est **distinct** du format JSON utilisé par les adapters Tauri pour persister dans `AppData`. Deux raisons :
+
+- **Stabilité** : si on change la persistance (SQLite, champs supplémentaires, etc.), les backups existants restent lisibles. L'adapter sait juste sérialiser/désérialiser son format interne ; le backup a le sien.
+- **Domaine vs infra** : `SauvegardeFormat.ts` vit dans `usecases/` (domaine), pas dans `infrastructure/`. La sérialisation porte des règles métier (versioning, validation du marqueur `atelier_lumiere`) ; l'infra n'est concernée que par le transport (lire/écrire un fichier texte).
+
+Un champ `version: number` permet d'ajouter des migrations explicites dans `desserialiser` quand le schéma évoluera. Pour l'instant, version différente = rejet avec message clair.
+
+#### Opération destructive assumée dans un use case
+
+`ImporterSauvegardeUseCase.execute` **remplace tout** sans merge. La confirmation utilisateur est portée par l'UI (pas par le domaine — un domain service ne pose pas de questions, il exécute). Pattern : le **use case se responsabilise pour la transaction logique**, l'UI pour le garde-fou utilisateur. Règle à retenir : ne jamais déplacer un `window.confirm` dans le domaine ; c'est une préoccupation UI pure.
+
+Non-atomique entre les deux repos (une sauvegarde réussie côté sessions, puis un crash au moment de `replaceAll(commandes)`, laisse un état incohérent). Documenté dans la JSDoc — acceptable pour V1 locale, à durcir si on passe sur SQLite avec `BEGIN/COMMIT`.
+
+#### Double port pour le picker fichier : UI (dialog) vs domaine (I/O)
+
+Le clic sur « Sauvegarder » fait DEUX choses :
+1. Demande à l'utilisateur où enregistrer → **port UI** `SauvegardeFichierPicker` (dialog natif)
+2. Écrit le contenu au chemin choisi → **port domaine** `SauvegardeFichierIO` (fs)
+
+On pourrait les fusionner mais ce serait mal : ils répondent à deux préoccupations distinctes (interaction utilisateur vs persistance fichier). Les séparer permet aussi de tester le use case sans mocker de dialog. C'est le même découpage qu'entre `DossierPicker` (UI) et `FileSystemScanner` (domaine) posé en slice 1.
+
+---
+
 ## Slice refacto — Prix live (plus de snapshot tant qu'il n'y a pas de facture)
 
 **Décision métier** (2026-04-21) : tant qu'on n'a pas de facturation, on ne veut **pas** de snapshot de prix sur les tirages. Si le copain ajuste la grille tarifaire d'une session, les commandes existantes doivent immédiatement refléter les nouveaux prix.

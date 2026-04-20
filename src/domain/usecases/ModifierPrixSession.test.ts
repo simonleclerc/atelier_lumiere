@@ -48,6 +48,10 @@ class InMemorySessionRepository implements SessionRepository {
   async findAll(): Promise<readonly Session[]> {
     return Array.from(this.sessions.values());
   }
+  async replaceAll(sessions: readonly Session[]): Promise<void> {
+    this.sessions.clear();
+    sessions.forEach((s) => this.sessions.set(s.id, s));
+  }
 }
 
 describe("ModifierPrixSessionUseCase", () => {

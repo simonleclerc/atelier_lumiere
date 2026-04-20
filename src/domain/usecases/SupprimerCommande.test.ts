@@ -20,6 +20,9 @@ class InMemoryCommandeRepo implements CommandeRepository {
     if (!c) throw new CommandeIntrouvable(id);
     return c;
   }
+  async findAll(): Promise<readonly Commande[]> {
+    return Array.from(this.map.values());
+  }
   async findBySessionId(sessionId: string): Promise<readonly Commande[]> {
     return Array.from(this.map.values()).filter(
       (c) => c.sessionId === sessionId,
@@ -37,6 +40,10 @@ class InMemoryCommandeRepo implements CommandeRepository {
   }
   async delete(id: string): Promise<void> {
     this.map.delete(id);
+  }
+  async replaceAll(commandes: readonly Commande[]): Promise<void> {
+    this.map.clear();
+    commandes.forEach((c) => this.map.set(c.id, c));
   }
 }
 
