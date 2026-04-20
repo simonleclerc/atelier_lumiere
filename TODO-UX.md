@@ -14,8 +14,9 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 - [ ] Resynchroniser l'export d'une commande pour un acheteur <!-- aujourd'hui le bouton Exporter de chaque commande est idempotent (écrase), il ne nettoie pas les anciens fichiers si des tirages ont été retirés — reste à faire -->
 - [x] Resynchroniser l'export de toute une session <!-- bouton Exporter toute la session, continue sur échec partiel avec rapport détaillé -->
 
-- [ ] Voir si l'export est à jour pour une commande (diff commande ↔ fichiers exportés)
-- [ ] Voir si l'export est à jour pour toutes les commandes d'une session
+- [x] Voir si l'export est à jour pour une commande <!-- badge statut (pas-exporté/incomplet/erreur/complet) sur chaque acheteur, message d'erreur visible sous le nom ; pas de diff fichier-par-fichier — on se base sur l'état capturé au dernier export et sur les modifications depuis -->
+- [x] Voir si l'export est à jour pour toutes les commandes d'une session <!-- badge agrégé dans le récapitulatif de la session, priorité erreur > mixte > complet/pas-exporté -->
+
 - [ ] Rescanner le dossier source (si les photos dedans ont changé)
 - [ ] Détecter les photos fantômes (référencées dans une commande mais disparues du dossier source)
 

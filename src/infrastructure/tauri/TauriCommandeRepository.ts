@@ -13,6 +13,10 @@ import {
   type CommandeRepository,
 } from "@/domain/ports/CommandeRepository";
 import { Format } from "@/domain/value-objects/Format";
+import {
+  StatutExport,
+  type NatureStatutExport,
+} from "@/domain/value-objects/StatutExport";
 
 /**
  * Adapter Tauri — persistance JSON dans `AppData/commandes.json`.
@@ -35,12 +39,18 @@ interface TirageJson {
   readonly quantite: number;
 }
 
+interface StatutJson {
+  readonly nature: NatureStatutExport;
+  readonly messageErreur?: string;
+}
+
 interface CommandeJson {
   readonly id: string;
   readonly sessionId: string;
   readonly acheteurId: string;
   readonly dateCreation: string;
   readonly tirages: readonly TirageJson[];
+  readonly statut?: StatutJson;
 }
 
 export class TauriCommandeRepository implements CommandeRepository {
@@ -166,6 +176,7 @@ function estTirageJson(item: unknown): item is TirageJson {
 }
 
 function toJson(commande: Commande): CommandeJson {
+  const statut = commande.statut;
   return {
     id: commande.id,
     sessionId: commande.sessionId,
@@ -177,6 +188,7 @@ function toJson(commande: Commande): CommandeJson {
       format: t.format.toDossierName(),
       quantite: t.quantite,
     })),
+    statut: { nature: statut.nature, messageErreur: statut.messageErreur },
   };
 }
 
@@ -195,5 +207,23 @@ function fromJson(raw: CommandeJson): Commande {
           quantite: t.quantite,
         }),
     ),
+    statut: statutDepuisJson(raw.statut),
   });
+}
+
+function statutDepuisJson(raw: StatutJson | undefined): StatutExport {
+  // Rétrocompat : les commandes persistées avant l'ajout du statut n'ont
+  // pas ce champ — on les considère comme jamais exportées.
+  if (!raw) return StatutExport.pasExporte();
+  switch (raw.nature) {
+    case "complet":
+      return StatutExport.complet();
+    case "incomplet":
+      return StatutExport.incomplet();
+    case "erreur":
+      return StatutExport.enErreur(raw.messageErreur ?? "");
+    case "pas-exporte":
+    default:
+      return StatutExport.pasExporte();
+  }
 }

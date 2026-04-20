@@ -119,7 +119,11 @@ class InMemoryCommandeRepo implements CommandeRepository {
 
 class FakeFileCopier implements FileCopier {
   readonly copies: { source: string; destination: string }[] = [];
+  readonly sourcesQuiEchouent = new Set<string>();
   async copier(cheminSource: string, cheminDestination: string): Promise<void> {
+    if (this.sourcesQuiEchouent.has(cheminSource)) {
+      throw new Error(`source introuvable : ${cheminSource}`);
+    }
     this.copies.push({ source: cheminSource, destination: cheminDestination });
   }
 }
@@ -182,6 +186,41 @@ describe("ExporterCommandeUseCase", () => {
 
     expect(resultat.fichiersCrees).toBe(0);
     expect(copier.copies).toHaveLength(0);
+  });
+
+  it("passe le statut de la commande à complet après un export réussi", async () => {
+    const { session, commande } = setup();
+    const cRepo = new InMemoryCommandeRepo([commande]);
+    const useCase = new ExporterCommandeUseCase(
+      cRepo,
+      new InMemorySessionRepo([session]),
+      new FakeFileCopier(),
+    );
+
+    await useCase.execute({ commandeId: commande.id });
+
+    const rechargee = await cRepo.findById(commande.id);
+    expect(rechargee.statut.estComplet()).toBe(true);
+  });
+
+  it("passe le statut à erreur avec message si la copie échoue, et re-lance", async () => {
+    const { session, commande } = setup();
+    const copier = new FakeFileCopier();
+    copier.sourcesQuiEchouent.add("/Users/copain/src/145.jpg");
+    const cRepo = new InMemoryCommandeRepo([commande]);
+    const useCase = new ExporterCommandeUseCase(
+      cRepo,
+      new InMemorySessionRepo([session]),
+      copier,
+    );
+
+    await expect(
+      useCase.execute({ commandeId: commande.id }),
+    ).rejects.toThrow(/source introuvable/);
+
+    const rechargee = await cRepo.findById(commande.id);
+    expect(rechargee.statut.estEnErreur()).toBe(true);
+    expect(rechargee.statut.messageErreur).toMatch(/source introuvable/);
   });
 
   it("rejette si l'acheteur a disparu de la session", async () => {

@@ -5,10 +5,12 @@ import { AcheteurForm } from "@/ui/components/AcheteurForm";
 import { AjouterTiragesForm } from "@/ui/components/AjouterTiragesForm";
 import { GrilleTarifaireEditor } from "@/ui/components/GrilleTarifaireEditor";
 import { SessionForm } from "@/ui/components/SessionForm";
+import { StatutBadge } from "@/ui/components/StatutBadge";
 import type { Acheteur } from "@/domain/entities/Acheteur";
 import type { Commande } from "@/domain/entities/Commande";
 import type { Session } from "@/domain/entities/Session";
 import { Montant } from "@/domain/value-objects/Montant";
+import { StatutExport } from "@/domain/value-objects/StatutExport";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
@@ -392,10 +394,15 @@ function RecapSession({
     }
   }
 
+  const statutSession = StatutExport.agreger(commandes.map((c) => c.statut));
+
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Récapitulatif</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold">Récapitulatif</h2>
+          <StatutBadge statut={statutSession} />
+        </div>
         <Button onClick={exporterTout} disabled={exportEnCours}>
           {exportEnCours
             ? "Export…"
@@ -470,8 +477,11 @@ function AcheteurCard({
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
       <header className="flex flex-wrap items-baseline justify-between gap-4">
-        <div className="flex flex-col">
-          <h3 className="text-base font-semibold">{acheteur.nom}</h3>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold">{acheteur.nom}</h3>
+            {commande && <StatutBadge statut={commande.statut} />}
+          </div>
           <div className="flex gap-3 text-xs text-muted-foreground">
             {acheteur.email && <span>{acheteur.email.valeur}</span>}
             {acheteur.telephone && <span>{acheteur.telephone}</span>}
@@ -479,6 +489,11 @@ function AcheteurCard({
               <span>aucun contact</span>
             )}
           </div>
+          {commande?.statut.estEnErreur() && commande.statut.messageErreur && (
+            <p className="text-xs text-destructive">
+              {commande.statut.messageErreur}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {commande && (

@@ -1,6 +1,7 @@
 import type { Format } from "../value-objects/Format";
 import type { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
+import { StatutExport } from "../value-objects/StatutExport";
 import { Tirage } from "./Tirage";
 
 /**
@@ -40,6 +41,7 @@ export interface CommandeDonnees {
   readonly acheteurId: string;
   readonly dateCreation: Date;
   readonly tirages?: readonly Tirage[];
+  readonly statut?: StatutExport;
 }
 
 export class Commande {
@@ -49,6 +51,7 @@ export class Commande {
   readonly dateCreation: Date;
 
   private _tirages: Tirage[];
+  private _statut: StatutExport;
 
   constructor(donnees: CommandeDonnees) {
     if (!donnees.id.trim()) {
@@ -69,6 +72,7 @@ export class Commande {
     this.acheteurId = donnees.acheteurId;
     this.dateCreation = donnees.dateCreation;
     this._tirages = [...(donnees.tirages ?? [])];
+    this._statut = donnees.statut ?? StatutExport.pasExporte();
   }
 
   static creer(params: {
@@ -90,6 +94,10 @@ export class Commande {
     return this._tirages;
   }
 
+  get statut(): StatutExport {
+    return this._statut;
+  }
+
   /**
    * Ajoute un tirage à la commande, avec CONSOLIDATION : si un tirage
    * existant a le même `(photoNumero, format)`, sa quantité est
@@ -103,20 +111,23 @@ export class Commande {
     const indexExistant = this._tirages.findIndex((t) =>
       t.egaleContenu(params.photoNumero, params.format),
     );
+    let impacte: Tirage;
     if (indexExistant !== -1) {
       const consolide = this._tirages[indexExistant].avecQuantiteCumulee(
         params.quantite,
       );
       this._tirages[indexExistant] = consolide;
-      return consolide;
+      impacte = consolide;
+    } else {
+      impacte = Tirage.creer({
+        photoNumero: params.photoNumero,
+        format: params.format,
+        quantite: params.quantite,
+      });
+      this._tirages.push(impacte);
     }
-    const nouveau = Tirage.creer({
-      photoNumero: params.photoNumero,
-      format: params.format,
-      quantite: params.quantite,
-    });
-    this._tirages.push(nouveau);
-    return nouveau;
+    this.invaliderStatutSiExporte();
+    return impacte;
   }
 
   /**
@@ -130,7 +141,38 @@ export class Commande {
     const index = this._tirages.findIndex((t) => t.id === tirageId);
     if (index === -1) throw new TirageIntrouvable(tirageId);
     this._tirages.splice(index, 1);
+    this.invaliderStatutSiExporte();
     return { devenueVide: this._tirages.length === 0 };
+  }
+
+  /**
+   * Après un export réussi. Le statut passe inconditionnellement à complet.
+   */
+  enregistrerExportReussi(): void {
+    this._statut = StatutExport.complet();
+  }
+
+  /**
+   * Après un export qui a levé. On stocke le message pour l'UI.
+   */
+  enregistrerExportEchec(message: string): void {
+    this._statut = StatutExport.enErreur(message);
+  }
+
+  /**
+   * Transition automatique au sein de l'agrégat quand on ajoute/retire un
+   * tirage : si on était `complet` (fichiers physiques en phase avec le
+   * contenu), on passe à `incomplet` (les fichiers ne reflètent plus
+   * l'état actuel). Les autres états ne bougent pas :
+   *  - `pas-exporte` → reste (aucun export n'a jamais été lancé)
+   *  - `incomplet` → reste (déjà désynchro, on continue de l'être)
+   *  - `erreur` → reste (l'utilisateur sait que c'est cassé, modifier le
+   *    contenu ne résout pas l'erreur tant qu'il n'a pas re-tenté)
+   */
+  private invaliderStatutSiExporte(): void {
+    if (this._statut.estComplet()) {
+      this._statut = StatutExport.incomplet();
+    }
   }
 
   estVide(): boolean {

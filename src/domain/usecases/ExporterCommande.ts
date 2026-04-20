@@ -49,18 +49,30 @@ export class ExporterCommandeUseCase {
     }
 
     const cibles = commande.nomsFichiersExport(acheteur.nom);
-    for (const cible of cibles) {
-      const cheminSource = joinChemin(
-        session.dossierSource.valeur,
-        `${cible.photoNumero}.jpg`,
-      );
-      const cheminDestination = joinChemin(
-        session.dossierExport.valeur,
-        cible.sousDossier,
-        cible.nomFichier,
-      );
-      await this.fileCopier.copier(cheminSource, cheminDestination);
+    try {
+      for (const cible of cibles) {
+        const cheminSource = joinChemin(
+          session.dossierSource.valeur,
+          `${cible.photoNumero}.jpg`,
+        );
+        const cheminDestination = joinChemin(
+          session.dossierExport.valeur,
+          cible.sousDossier,
+          cible.nomFichier,
+        );
+        await this.fileCopier.copier(cheminSource, cheminDestination);
+      }
+    } catch (err) {
+      // Enregistre l'échec sur l'agrégat puis re-lance — pattern
+      // « instrumentation » : le use case ne masque pas l'erreur, il la
+      // capture pour le rapport d'état avant de la remonter à l'appelant.
+      const message = err instanceof Error ? err.message : String(err);
+      commande.enregistrerExportEchec(message);
+      await this.commandeRepository.save(commande);
+      throw err;
     }
+    commande.enregistrerExportReussi();
+    await this.commandeRepository.save(commande);
     return { fichiersCrees: cibles.length };
   }
 }

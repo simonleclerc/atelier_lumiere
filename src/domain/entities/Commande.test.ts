@@ -191,6 +191,107 @@ describe("Commande (agrégat racine avec tirages)", () => {
   });
 });
 
+describe("Commande — statut d'export", () => {
+  it("est pas-exporte à la création", () => {
+    const c = commandeDemo();
+    expect(c.statut.estPasExporte()).toBe(true);
+  });
+
+  it("enregistrerExportReussi passe le statut à complet", () => {
+    const c = commandeDemo();
+    c.ajouterTirage({
+      photoNumero: 1,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    c.enregistrerExportReussi();
+    expect(c.statut.estComplet()).toBe(true);
+  });
+
+  it("enregistrerExportEchec passe le statut à erreur + message", () => {
+    const c = commandeDemo();
+    c.enregistrerExportEchec("fichier /src/99.jpg manquant");
+    expect(c.statut.estEnErreur()).toBe(true);
+    expect(c.statut.messageErreur).toBe("fichier /src/99.jpg manquant");
+  });
+
+  it("ajouterTirage passe complet → incomplet", () => {
+    const c = commandeDemo();
+    c.ajouterTirage({
+      photoNumero: 1,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    c.enregistrerExportReussi();
+    c.ajouterTirage({
+      photoNumero: 2,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    expect(c.statut.estIncomplet()).toBe(true);
+  });
+
+  it("retirerTirage passe complet → incomplet", () => {
+    const c = commandeDemo();
+    const t1 = c.ajouterTirage({
+      photoNumero: 1,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    c.ajouterTirage({
+      photoNumero: 2,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    c.enregistrerExportReussi();
+    c.retirerTirage(t1.id);
+    expect(c.statut.estIncomplet()).toBe(true);
+  });
+
+  it("ajouterTirage sur pas-exporte reste pas-exporte", () => {
+    const c = commandeDemo();
+    c.ajouterTirage({
+      photoNumero: 1,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    expect(c.statut.estPasExporte()).toBe(true);
+  });
+
+  it("ajouterTirage sur erreur reste erreur", () => {
+    const c = commandeDemo();
+    c.enregistrerExportEchec("bug");
+    c.ajouterTirage({
+      photoNumero: 1,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    expect(c.statut.estEnErreur()).toBe(true);
+  });
+
+  it("ajouterTirage sur incomplet reste incomplet", () => {
+    const c = commandeDemo();
+    c.ajouterTirage({
+      photoNumero: 1,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    c.enregistrerExportReussi();
+    c.ajouterTirage({
+      photoNumero: 2,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    expect(c.statut.estIncomplet()).toBe(true);
+    c.ajouterTirage({
+      photoNumero: 3,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    expect(c.statut.estIncomplet()).toBe(true);
+  });
+});
+
 describe("slugifierNomAcheteur", () => {
   it("normalise espaces, casse, accents", () => {
     expect(slugifierNomAcheteur("Jean-François Müller")).toBe(

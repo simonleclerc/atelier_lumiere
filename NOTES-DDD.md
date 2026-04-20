@@ -318,6 +318,46 @@ Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs mé
 
 ---
 
+## Slice bonus — Statut d'export sur chaque commande et sur la session
+
+**Valeur métier** : le photographe veut voir, d'un coup d'œil, ce qui est à jour côté impression et ce qui reste à faire. Quatre états au niveau de la commande : `pas-exporté`, `export incomplet` (ajout/retrait depuis le dernier export), `export en erreur` (avec message), `exporté`. Statut de session = agrégat des statuts de ses commandes.
+
+**Livrables** :
+- VO `StatutExport` (union fermée `pas-exporte | incomplet | erreur | complet`, champ optionnel `messageErreur`, factory par état, méthode statique `agreger`)
+- Champ `_statut` sur `Commande` + getter + méthodes `enregistrerExportReussi` / `enregistrerExportEchec(message)`
+- Invalidation auto dans `ajouterTirage` / `retirerTirage` : si `complet`, passe à `incomplet`
+- Instrumentation d'`ExporterCommandeUseCase` : try/catch autour de la copie, statut mis à jour + save puis re-throw en cas d'échec
+- Persistance dans `TauriCommandeRepository` et `SauvegardeFormat` (backup) ; rétrocompat : JSON sans `statut` → `pas-exporte` par défaut
+- Composant UI `StatutBadge` coloré (gris / ambre / rouge / vert) ; message d'erreur visible sous le nom de l'acheteur dans `AcheteurCard` ; badge agrégé dans `RecapSession`
+
+### Patterns DDD introduits
+
+#### État d'un événement capturé comme VO sur l'agrégat
+
+Le statut est une conséquence d'un événement métier (l'export a réussi / échoué). On le stocke **sur l'agrégat** (`Commande._statut`), pas dans une table séparée « historique d'export » ni sur un objet Export dédié. Critère : si la seule question qu'on se pose à propos de ce statut est « est-ce à jour MAINTENANT ? », un champ d'état sur l'agrégat suffit. Si on voulait un historique complet (qui a exporté quand, avec quel résultat), on introduirait une entité `EvenementExport` distincte.
+
+VO plutôt que simple string ou enum parce qu'il porte deux responsabilités : (1) les transitions légales (on ne passe pas de `complet` à `pas-exporte` par n'importe quel chemin — ici toute modification de tirage sur une commande complète la remet à `incomplet`), (2) la logique d'agrégation pour la session.
+
+#### Invalidation automatique au sein de l'agrégat
+
+Quand un tirage est ajouté ou retiré, `Commande` appelle en interne `invaliderStatutSiExporte`. Ce n'est **pas** au use case de se souvenir de le faire — l'invariant « le statut reflète la cohérence entre contenu et fichiers exportés » est porté par l'agrégat. Règle à retenir : quand une modification de collection peut invalider une information dérivée, la bascule vit dans la méthode de mutation, pas dans les appelants.
+
+#### Instrumentation d'un use case : capture de l'échec sans le masquer
+
+`ExporterCommandeUseCase` enveloppe désormais la copie dans un try/catch :
+- **Succès** → `commande.enregistrerExportReussi()` puis save
+- **Échec** → `commande.enregistrerExportEchec(err.message)`, save, **puis re-throw**
+
+Le pattern clé : on capture pour observer, on re-lance pour ne pas masquer. `ExporterSessionUseCase` voit toujours l'exception et l'agrège dans `erreurs[]`, exactement comme avant. La nouveauté : la trace de cet échec est persistée sur l'agrégat et visible à l'UI bien après la disparition du toast.
+
+#### Agrégation pure cross-entités
+
+Le statut de session n'est **pas stocké**. Il se calcule à la volée via `StatutExport.agreger(commandes.map(c => c.statut))`. Pas de cache, pas de désynchronisation possible. Même principe que pour le total live des prix (slice précédente) : si l'info est dérivable de l'état des agrégats, ne pas la stocker.
+
+**Hiérarchie des priorités dans l'agrégation** : erreur > mixte → incomplet > homogène complet > homogène pas-exporté. L'erreur gagne toujours — c'est le signal d'action le plus fort.
+
+---
+
 ## Slice bonus — Export global d'une session (use case orchestrateur)
 
 **Valeur métier** : un seul clic pour exporter les commandes de TOUS les acheteurs d'une session. Avant : N clics pour N acheteurs.

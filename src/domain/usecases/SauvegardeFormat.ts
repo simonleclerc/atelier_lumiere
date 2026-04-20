@@ -8,6 +8,10 @@ import { Email } from "../value-objects/Email";
 import { Format } from "../value-objects/Format";
 import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
+import {
+  StatutExport,
+  type NatureStatutExport,
+} from "../value-objects/StatutExport";
 import { parseTypeSession } from "../value-objects/TypeSession";
 
 /**
@@ -67,12 +71,18 @@ interface TirageJson {
   readonly quantite: number;
 }
 
+interface StatutJson {
+  readonly nature: NatureStatutExport;
+  readonly messageErreur?: string;
+}
+
 interface CommandeJson {
   readonly id: string;
   readonly sessionId: string;
   readonly acheteurId: string;
   readonly dateCreation: string;
   readonly tirages: readonly TirageJson[];
+  readonly statut?: StatutJson;
 }
 
 interface SauvegardeJson {
@@ -180,6 +190,7 @@ function sessionDepuisJson(raw: SessionJson): Session {
 }
 
 function commandeVersJson(commande: Commande): CommandeJson {
+  const statut = commande.statut;
   return {
     id: commande.id,
     sessionId: commande.sessionId,
@@ -191,6 +202,7 @@ function commandeVersJson(commande: Commande): CommandeJson {
       format: t.format.toDossierName(),
       quantite: t.quantite,
     })),
+    statut: { nature: statut.nature, messageErreur: statut.messageErreur },
   };
 }
 
@@ -209,7 +221,23 @@ function commandeDepuisJson(raw: CommandeJson): Commande {
           quantite: t.quantite,
         }),
     ),
+    statut: statutDepuisJson(raw.statut),
   });
+}
+
+function statutDepuisJson(raw: StatutJson | undefined): StatutExport {
+  if (!raw) return StatutExport.pasExporte();
+  switch (raw.nature) {
+    case "complet":
+      return StatutExport.complet();
+    case "incomplet":
+      return StatutExport.incomplet();
+    case "erreur":
+      return StatutExport.enErreur(raw.messageErreur ?? "");
+    case "pas-exporte":
+    default:
+      return StatutExport.pasExporte();
+  }
 }
 
 function estSauvegardeJson(item: unknown): item is SauvegardeJson {
