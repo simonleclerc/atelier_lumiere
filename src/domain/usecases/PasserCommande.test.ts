@@ -16,6 +16,7 @@ import { Montant } from "../value-objects/Montant";
 import {
   AcheteurNAppartientPasASession,
   PasserCommandeUseCase,
+  PhotoIntrouvableDansSession,
 } from "./PasserCommande";
 
 function grille(): GrilleTarifaire {
@@ -75,10 +76,13 @@ class InMemoryCommandeRepo implements CommandeRepository {
       (c) => c.sessionId === sessionId,
     );
   }
+  async delete(id: string): Promise<void> {
+    this.map.delete(id);
+  }
 }
 
 describe("PasserCommandeUseCase (cross-aggregate)", () => {
-  it("crée une commande vide pour un acheteur de la session", async () => {
+  it("crée une commande remplie avec snapshot du prix", async () => {
     const { session, acheteurId } = sessionAvecAcheteur();
     const sRepo = new InMemorySessionRepo([session]);
     const cRepo = new InMemoryCommandeRepo();
@@ -87,22 +91,77 @@ describe("PasserCommandeUseCase (cross-aggregate)", () => {
     const commande = await useCase.execute({
       sessionId: session.id,
       acheteurId,
+      photoNumero: 2,
+      format: "20x30",
+      quantite: 3,
     });
 
     expect(commande.sessionId).toBe(session.id);
     expect(commande.acheteurId).toBe(acheteurId);
-    expect(commande.lignes).toHaveLength(0);
+    expect(commande.photoNumero).toBe(2);
+    expect(commande.quantite).toBe(3);
+    expect(commande.montantUnitaire.centimes).toBe(1200);
+    expect(commande.total().centimes).toBe(3600);
     expect(cRepo.map.get(commande.id)).toBeDefined();
+  });
+
+  it("fige le prix à la création même si la grille change plus tard", async () => {
+    const { session, acheteurId } = sessionAvecAcheteur();
+    const sRepo = new InMemorySessionRepo([session]);
+    const cRepo = new InMemoryCommandeRepo();
+    const useCase = new PasserCommandeUseCase(sRepo, cRepo);
+
+    const commande = await useCase.execute({
+      sessionId: session.id,
+      acheteurId,
+      photoNumero: 1,
+      format: "20x30",
+      quantite: 1,
+    });
+
+    session.modifierPrix(Format._20x30, new Montant(9999));
+    await sRepo.save(session);
+
+    const rechargee = await cRepo.findById(commande.id);
+    expect(rechargee.montantUnitaire.centimes).toBe(1200);
   });
 
   it("rejette si l'acheteur n'est pas inscrit sur la session", async () => {
     const { session } = sessionAvecAcheteur();
     const sRepo = new InMemorySessionRepo([session]);
-    const useCase = new PasserCommandeUseCase(sRepo, new InMemoryCommandeRepo());
+    const useCase = new PasserCommandeUseCase(
+      sRepo,
+      new InMemoryCommandeRepo(),
+    );
 
     await expect(
-      useCase.execute({ sessionId: session.id, acheteurId: "ach-fantôme" }),
+      useCase.execute({
+        sessionId: session.id,
+        acheteurId: "ach-fantôme",
+        photoNumero: 1,
+        format: "20x30",
+        quantite: 1,
+      }),
     ).rejects.toBeInstanceOf(AcheteurNAppartientPasASession);
+  });
+
+  it("rejette une photo absente de la session", async () => {
+    const { session, acheteurId } = sessionAvecAcheteur();
+    const sRepo = new InMemorySessionRepo([session]);
+    const useCase = new PasserCommandeUseCase(
+      sRepo,
+      new InMemoryCommandeRepo(),
+    );
+
+    await expect(
+      useCase.execute({
+        sessionId: session.id,
+        acheteurId,
+        photoNumero: 999,
+        format: "20x30",
+        quantite: 1,
+      }),
+    ).rejects.toBeInstanceOf(PhotoIntrouvableDansSession);
   });
 
   it("remonte SessionIntrouvable si la session n'existe pas", async () => {
@@ -111,7 +170,13 @@ describe("PasserCommandeUseCase (cross-aggregate)", () => {
       new InMemoryCommandeRepo(),
     );
     await expect(
-      useCase.execute({ sessionId: "inconnue", acheteurId: "x" }),
+      useCase.execute({
+        sessionId: "inconnue",
+        acheteurId: "x",
+        photoNumero: 1,
+        format: "20x30",
+        quantite: 1,
+      }),
     ).rejects.toBeInstanceOf(SessionIntrouvable);
   });
 });

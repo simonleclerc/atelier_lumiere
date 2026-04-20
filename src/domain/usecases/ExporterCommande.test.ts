@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { Commande } from "../entities/Commande";
-import { LigneCommande } from "../entities/LigneCommande";
 import { Session } from "../entities/Session";
 import {
   CommandeIntrouvable,
@@ -42,23 +41,11 @@ function setup() {
   const commande = Commande.creer({
     sessionId: session.id,
     acheteurId: acheteur.id,
+    photoNumero: 145,
+    format: Format._20x30,
+    quantite: 3,
+    montantUnitaire: new Montant(1200),
   });
-  commande.ajouterLigne(
-    LigneCommande.creer({
-      photoNumero: 145,
-      format: Format._20x30,
-      quantite: 3,
-      montantUnitaire: new Montant(1200),
-    }),
-  );
-  commande.ajouterLigne(
-    LigneCommande.creer({
-      photoNumero: 1,
-      format: Format.NUMERIQUE,
-      quantite: 1,
-      montantUnitaire: new Montant(500),
-    }),
-  );
   return { session, commande };
 }
 
@@ -98,6 +85,9 @@ class InMemoryCommandeRepo implements CommandeRepository {
       (c) => c.sessionId === sessionId,
     );
   }
+  async delete(id: string): Promise<void> {
+    this.map.delete(id);
+  }
 }
 
 class FakeFileCopier implements FileCopier {
@@ -108,7 +98,7 @@ class FakeFileCopier implements FileCopier {
 }
 
 describe("ExporterCommandeUseCase", () => {
-  it("copie les fichiers selon la quantité de chaque ligne dans le sous-dossier du format", async () => {
+  it("copie N fichiers selon la quantité dans le sous-dossier du format", async () => {
     const { session, commande } = setup();
     const sRepo = new InMemorySessionRepo([session]);
     const cRepo = new InMemoryCommandeRepo([commande]);
@@ -117,7 +107,7 @@ describe("ExporterCommandeUseCase", () => {
 
     const resultat = await useCase.execute({ commandeId: commande.id });
 
-    expect(resultat.fichiersCrees).toBe(4); // 3 + 1
+    expect(resultat.fichiersCrees).toBe(3);
     expect(copier.copies).toEqual([
       {
         source: "/Users/copain/src/145.jpg",
@@ -131,14 +121,10 @@ describe("ExporterCommandeUseCase", () => {
         source: "/Users/copain/src/145.jpg",
         destination: "/Users/copain/export/20x30/martin_dupont_145_3.jpg",
       },
-      {
-        source: "/Users/copain/src/1.jpg",
-        destination: "/Users/copain/export/Numerique/martin_dupont_1_1.jpg",
-      },
     ]);
   });
 
-  it("ne copie rien pour une commande vide", async () => {
+  it("gère le format Numerique via son propre sous-dossier", async () => {
     const session = Session.creer({
       commanditaire: "X",
       referent: "Y",
@@ -147,12 +133,16 @@ describe("ExporterCommandeUseCase", () => {
       dossierSource: new CheminDossier("/a"),
       dossierExport: new CheminDossier("/b"),
       grilleTarifaire: grille(),
-      photoNumeros: [1],
+      photoNumeros: [7],
     });
-    const acheteur = session.ajouterAcheteur({ nom: "Alice" });
+    const acheteur = session.ajouterAcheteur({ nom: "Anne" });
     const commande = Commande.creer({
       sessionId: session.id,
       acheteurId: acheteur.id,
+      photoNumero: 7,
+      format: Format.NUMERIQUE,
+      quantite: 2,
+      montantUnitaire: new Montant(500),
     });
     const copier = new FakeFileCopier();
     const useCase = new ExporterCommandeUseCase(
@@ -161,15 +151,16 @@ describe("ExporterCommandeUseCase", () => {
       copier,
     );
 
-    const resultat = await useCase.execute({ commandeId: commande.id });
+    await useCase.execute({ commandeId: commande.id });
 
-    expect(resultat.fichiersCrees).toBe(0);
-    expect(copier.copies).toHaveLength(0);
+    expect(copier.copies.map((c) => c.destination)).toEqual([
+      "/b/Numerique/anne_7_1.jpg",
+      "/b/Numerique/anne_7_2.jpg",
+    ]);
   });
 
   it("rejette si l'acheteur a disparu de la session", async () => {
     const { session, commande } = setup();
-    // On recharge une session "sans" cet acheteur
     const sessionSansAcheteur = Session.creer({
       commanditaire: "X",
       referent: "Y",

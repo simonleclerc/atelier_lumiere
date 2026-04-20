@@ -3,10 +3,10 @@ import {
   exists,
   mkdir,
   readTextFile,
+  remove,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { Commande } from "@/domain/entities/Commande";
-import { LigneCommande } from "@/domain/entities/LigneCommande";
 import {
   CommandeIntrouvable,
   type CommandeRepository,
@@ -17,26 +17,23 @@ import { Montant } from "@/domain/value-objects/Montant";
 /**
  * Adapter Tauri — persistance JSON dans `AppData/commandes.json`.
  *
- * Fichier séparé de `sessions.json` parce que Commande est un agrégat
- * racine distinct (cycle de vie indépendant). Règle "un agrégat = une
- * transaction = un fichier".
+ * Schéma : une commande par ligne (plus de tableau `lignes[]` depuis la
+ * simplification du modèle). Tolérant aux anciens JSON qui contenaient
+ * des lignes — les entrées au schéma obsolète sont silencieusement
+ * ignorées avec un warning console. Migration automatique acceptable
+ * pour une app locale mono-utilisateur en dev.
  */
 const FICHIER = "commandes.json";
-
-interface LigneJson {
-  readonly id: string;
-  readonly photoNumero: number;
-  readonly format: string;
-  readonly quantite: number;
-  readonly centimesUnitaire: number;
-}
 
 interface CommandeJson {
   readonly id: string;
   readonly sessionId: string;
   readonly acheteurId: string;
   readonly dateCreation: string;
-  readonly lignes: readonly LigneJson[];
+  readonly photoNumero: number;
+  readonly format: string;
+  readonly quantite: number;
+  readonly centimesUnitaire: number;
 }
 
 export class TauriCommandeRepository implements CommandeRepository {
@@ -62,6 +59,20 @@ export class TauriCommandeRepository implements CommandeRepository {
     return raws.filter((r) => r.sessionId === sessionId).map(fromJson);
   }
 
+  async delete(id: string): Promise<void> {
+    const raws = await this.loadRaw();
+    const filtered = raws.filter((r) => r.id !== id);
+    if (filtered.length === raws.length) return;
+    await this.ensureAppDir();
+    if (filtered.length === 0) {
+      await remove(FICHIER, { baseDir: BaseDirectory.AppData });
+      return;
+    }
+    await writeTextFile(FICHIER, JSON.stringify(filtered, null, 2), {
+      baseDir: BaseDirectory.AppData,
+    });
+  }
+
   private async ensureAppDir(): Promise<void> {
     const ok = await exists("", { baseDir: BaseDirectory.AppData });
     if (!ok) {
@@ -76,8 +87,35 @@ export class TauriCommandeRepository implements CommandeRepository {
       baseDir: BaseDirectory.AppData,
     });
     if (!content.trim()) return [];
-    return JSON.parse(content) as CommandeJson[];
+    const parsed = JSON.parse(content) as unknown[];
+    const valides: CommandeJson[] = [];
+    for (const item of parsed) {
+      if (estCommandeJson(item)) {
+        valides.push(item);
+      } else {
+        console.warn(
+          "TauriCommandeRepository: entrée ignorée (schéma obsolète ou invalide)",
+          item,
+        );
+      }
+    }
+    return valides;
   }
+}
+
+function estCommandeJson(item: unknown): item is CommandeJson {
+  if (!item || typeof item !== "object") return false;
+  const o = item as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.sessionId === "string" &&
+    typeof o.acheteurId === "string" &&
+    typeof o.dateCreation === "string" &&
+    typeof o.photoNumero === "number" &&
+    typeof o.format === "string" &&
+    typeof o.quantite === "number" &&
+    typeof o.centimesUnitaire === "number"
+  );
 }
 
 function toJson(commande: Commande): CommandeJson {
@@ -86,13 +124,10 @@ function toJson(commande: Commande): CommandeJson {
     sessionId: commande.sessionId,
     acheteurId: commande.acheteurId,
     dateCreation: commande.dateCreation.toISOString(),
-    lignes: commande.lignes.map((l) => ({
-      id: l.id,
-      photoNumero: l.photoNumero,
-      format: l.format.toDossierName(),
-      quantite: l.quantite,
-      centimesUnitaire: l.montantUnitaire.centimes,
-    })),
+    photoNumero: commande.photoNumero,
+    format: commande.format.toDossierName(),
+    quantite: commande.quantite,
+    centimesUnitaire: commande.montantUnitaire.centimes,
   };
 }
 
@@ -102,15 +137,9 @@ function fromJson(raw: CommandeJson): Commande {
     sessionId: raw.sessionId,
     acheteurId: raw.acheteurId,
     dateCreation: new Date(raw.dateCreation),
-    lignes: raw.lignes.map(
-      (l) =>
-        new LigneCommande({
-          id: l.id,
-          photoNumero: l.photoNumero,
-          format: Format.depuis(l.format),
-          quantite: l.quantite,
-          montantUnitaire: new Montant(l.centimesUnitaire),
-        }),
-    ),
+    photoNumero: raw.photoNumero,
+    format: Format.depuis(raw.format),
+    quantite: raw.quantite,
+    montantUnitaire: new Montant(raw.centimesUnitaire),
   });
 }

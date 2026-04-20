@@ -16,10 +16,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       trouverSessionParId={container.trouverSessionParId}
       listerCommandesDeSession={container.listerCommandesDeSession}
       passerCommande={container.passerCommande}
-      trouverCommandeParId={container.trouverCommandeParId}
-      ajouterLigneACommande={container.ajouterLigneACommande}
-      retirerLigneDeCommande={container.retirerLigneDeCommande}
       exporterCommande={container.exporterCommande}
+      supprimerCommande={container.supprimerCommande}
       dossierPicker={container.dossierPicker}
     />
   </React.StrictMode>,

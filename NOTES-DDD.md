@@ -17,8 +17,7 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 | **Commanditaire** | Champ texte sur Session | Lieu/compagnie/production qui a commandé le shoot. Pas d'entité réutilisable (YAGNI). |
 | **Référent** | Champ texte sur Session | Contact côté commanditaire. |
 | **Acheteur** | Entité fille de Session | Particulier/pro qui achète des tirages. Rattaché à une session, pas réutilisable cross-session. |
-| **Commande** | Agrégat racine | `sessionId` + `acheteurId` + lignes. Cycle de vie distinct de la Session (arrive après le shoot). |
-| **LigneCommande** | Entité fille de Commande | `{ id, photoNumero, format, quantite, montantUnitaire }`. Montant snapshot figé à la création. |
+| **Commande** | Agrégat racine | Un tirage : `sessionId` + `acheteurId` + `photoNumero` + `format` + `quantite` + `montantUnitaire` (snapshot). Plus de collection de lignes — une commande = un tirage, un acheteur qui veut N photos différentes a N commandes distinctes. |
 | **Format** | VO | Catalogue fermé : `15x23`, `20x30`, `30x45`, `Numerique`. |
 | **Montant** | VO | Centimes d'euros (jamais de float pour de l'argent). |
 | **GrilleTarifaire** | VO dans Session | Mapping Format → Montant, ajustable par session via `Session.modifierPrix`. |
@@ -39,11 +38,13 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 └──────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────┐
-│ Commande (agrégat racine)                                │
+│ Commande (agrégat racine, sans enfants)                  │
 │  ├── sessionId (référence par ID)                        │
 │  ├── acheteurId (référence par ID, acheteur de la session) │
-│  └── LigneCommande[] (entités filles, identité = id)     │
-│       └─ montantUnitaire SNAPSHOT (figé à la création)   │
+│  ├── photoNumero + format + quantite                     │
+│  └── montantUnitaire SNAPSHOT (figé à la création)       │
+│                                                          │
+│  Une commande = un tirage. Pas de collection fille.      │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -308,6 +309,41 @@ Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs mé
 #### Réutilisation d'une erreur cross-aggregate
 
 `ExporterCommande` réutilise `AcheteurNAppartientPasASession` (déjà définie dans `PasserCommande.ts`) quand l'acheteur a disparu de la session entre le moment de la commande et le moment de l'export. Même sémantique métier, pas de duplication — on importe. Si le pattern se multiplie, on factorisera dans un fichier d'erreurs partagées.
+
+---
+
+## Slice refacto — Commande sans lignes
+
+**Décision métier** : le copain n'a pas besoin de regrouper plusieurs tirages dans une seule « commande ». Chaque tirage (photo × format × quantité) est une commande à part entière. Un acheteur qui veut 3 photos en 2 formats = 6 commandes.
+
+**Impact code** :
+- `LigneCommande` supprimé (entité + tests + fichier)
+- `Commande` porte directement `photoNumero`, `format`, `quantite`, `montantUnitaire`
+- `PasserCommandeUseCase` crée une commande **remplie** (plus de création vide puis ajout de lignes)
+- `AjouterLigneACommandeUseCase` supprimé — fusionné avec `PasserCommande`
+- `RetirerLigneDeCommandeUseCase` remplacé par `SupprimerCommandeUseCase` (supprime la commande entière)
+- `CommandeRepository.delete(id)` ajouté (idempotent)
+- `CommandePage` supprimée, la gestion des commandes vit inline dans `AcheteurCard` de `SessionDetailPage`
+- `TauriCommandeRepository` : schéma JSON simplifié, tolérant aux anciens schémas (entrées invalides ignorées avec un `console.warn`)
+- La saisie multi-photos `1,3,155` crée désormais N commandes en rafale (au lieu de N lignes dans une commande unique)
+
+### Patterns DDD introduits
+
+#### Simplifier le modèle quand le métier simplifie
+
+Classique, mais vaut d'être explicite : on avait anticipé des lignes dans une commande « parce que des apps de e-commerce ont toujours eu ça ». Le copain n'en a pas besoin — il raisonne tirage par tirage, pas panier. **La modélisation suit le métier, pas l'intuition du dev.**
+
+Règle à retenir : YAGNI s'applique aussi **rétroactivement**. Si un concept qu'on a modélisé ne porte aucun comportement ni invariant que le métier défend, le supprimer est une amélioration nette — moins de couches, moins de code à maintenir, pas de perte expressive. Ici, une Commande à 1 ligne rendait la classe `LigneCommande` redondante.
+
+#### Tolérance aux anciens schémas de persistance
+
+`TauriCommandeRepository.loadRaw` valide chaque entrée JSON (type-guard `estCommandeJson`) et **ignore** celles au schéma obsolète avec un `console.warn`. Zéro migration explicite, zéro crash au démarrage.
+
+C'est un compromis acceptable pour une app desktop en dev (une migration formelle viendra si on déploie pour de vrai). **Règle** : une couche d'infra qui désérialise doit toujours gérer le cas « JSON non conforme » — crash ou skip, mais jamais undefined.
+
+#### Pattern snapshot conservé (et renforcé)
+
+Le snapshot du prix vivait dans `LigneCommande.montantUnitaire`. Il vit maintenant dans `Commande.montantUnitaire`. La règle métier et sa raison d'être n'ont pas bougé — c'est juste l'endroit qui change. Quand un concept absorbe son fils, ses propriétés migrent mécaniquement.
 
 ---
 

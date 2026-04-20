@@ -20,4 +20,8 @@ export interface CommandeRepository {
   save(commande: Commande): Promise<void>;
   findById(id: string): Promise<Commande>;
   findBySessionId(sessionId: string): Promise<readonly Commande[]>;
+  /**
+   * Supprime la commande ; ne lève pas si l'id n'existe pas (idempotent).
+   */
+  delete(id: string): Promise<void>;
 }

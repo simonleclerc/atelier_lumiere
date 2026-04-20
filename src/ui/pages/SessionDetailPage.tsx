@@ -3,17 +3,20 @@ import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
 import { AcheteurForm } from "@/ui/components/AcheteurForm";
 import { GrilleTarifaireEditor } from "@/ui/components/GrilleTarifaireEditor";
+import { NouvelleCommandeForm } from "@/ui/components/NouvelleCommandeForm";
 import { SessionForm } from "@/ui/components/SessionForm";
 import type { Acheteur } from "@/domain/entities/Acheteur";
 import type { Commande } from "@/domain/entities/Commande";
 import type { Session } from "@/domain/entities/Session";
 import { Montant } from "@/domain/value-objects/Montant";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
+import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import type { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
 import type { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import type { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
+import type { SupprimerCommandeUseCase } from "@/domain/usecases/SupprimerCommande";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 
@@ -26,9 +29,10 @@ interface Props {
   trouverSession: TrouverSessionParIdUseCase;
   listerCommandes: ListerCommandesDeSessionUseCase;
   passerCommande: PasserCommandeUseCase;
+  exporterCommande: ExporterCommandeUseCase;
+  supprimerCommande: SupprimerCommandeUseCase;
   dossierPicker: DossierPicker;
   onRetour: () => void;
-  onOuvrirCommande: (commandeId: string) => void;
 }
 
 type TriAcheteurs = "ajout" | "alpha" | "ca" | "photos";
@@ -49,9 +53,10 @@ export function SessionDetailPage({
   trouverSession,
   listerCommandes,
   passerCommande,
+  exporterCommande,
+  supprimerCommande,
   dossierPicker,
   onRetour,
-  onOuvrirCommande,
 }: Props) {
   const [session, setSession] = useState<Session | null>(null);
   const [commandes, setCommandes] = useState<readonly Commande[]>([]);
@@ -307,10 +312,12 @@ export function SessionDetailPage({
                 key={a.id}
                 acheteur={a}
                 commandes={commandes.filter((c) => c.acheteurId === a.id)}
-                sessionId={session.id}
+                session={session}
                 passerCommande={passerCommande}
-                onOuvrirCommande={onOuvrirCommande}
+                exporterCommande={exporterCommande}
+                supprimerCommande={supprimerCommande}
                 onModifier={() => setAcheteurEnEdition(a.id)}
+                onMaj={recharger}
               />
             ),
           )}
@@ -332,9 +339,7 @@ function RecapSession({
     new Montant(0),
   );
   const tiragesTotal = commandes.reduce((n, c) => n + c.nombreTirages(), 0);
-  const acheteursActifs = new Set(
-    commandes.filter((c) => c.lignes.length > 0).map((c) => c.acheteurId),
-  ).size;
+  const acheteursActifs = new Set(commandes.map((c) => c.acheteurId)).size;
 
   if (commandes.length === 0) return null;
 
@@ -366,19 +371,23 @@ function RecapSession({
 function AcheteurCard({
   acheteur,
   commandes,
-  sessionId,
+  session,
   passerCommande,
-  onOuvrirCommande,
+  exporterCommande,
+  supprimerCommande,
   onModifier,
+  onMaj,
 }: {
   acheteur: Acheteur;
   commandes: readonly Commande[];
-  sessionId: string;
+  session: Session;
   passerCommande: PasserCommandeUseCase;
-  onOuvrirCommande: (id: string) => void;
+  exporterCommande: ExporterCommandeUseCase;
+  supprimerCommande: SupprimerCommandeUseCase;
   onModifier: () => void;
+  onMaj: () => void;
 }) {
-  const [enCours, setEnCours] = useState(false);
+  const [nouvelleOuverte, setNouvelleOuverte] = useState(false);
 
   const tiragesAcheteur = commandes.reduce(
     (n, c) => n + c.nombreTirages(),
@@ -388,23 +397,6 @@ function AcheteurCard({
     (somme, c) => somme.ajouter(c.total()),
     new Montant(0),
   );
-
-  async function creerCommande(): Promise<void> {
-    setEnCours(true);
-    try {
-      const c = await passerCommande.execute({
-        sessionId,
-        acheteurId: acheteur.id,
-      });
-      onOuvrirCommande(c.id);
-    } catch (err) {
-      toast.error("Impossible de créer la commande", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setEnCours(false);
-    }
-  }
 
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
@@ -429,31 +421,119 @@ function AcheteurCard({
           <Button variant="ghost" onClick={onModifier}>
             Modifier
           </Button>
-          <Button variant="outline" onClick={creerCommande} disabled={enCours}>
-            {enCours ? "…" : "Passer une commande"}
-          </Button>
+          {!nouvelleOuverte && (
+            <Button
+              variant="outline"
+              onClick={() => setNouvelleOuverte(true)}
+            >
+              Nouvelle commande
+            </Button>
+          )}
         </div>
       </header>
 
+      {nouvelleOuverte && (
+        <NouvelleCommandeForm
+          session={session}
+          acheteurId={acheteur.id}
+          passerCommande={passerCommande}
+          onAjoutees={() => {
+            setNouvelleOuverte(false);
+            onMaj();
+          }}
+          onAnnuler={() => setNouvelleOuverte(false)}
+        />
+      )}
+
       {commandes.length > 0 && (
-        <ul className="flex flex-col gap-1 border-t border-border/50 pt-2">
+        <ul className="flex flex-col gap-2 border-t border-border/50 pt-3">
           {commandes.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => onOuvrirCommande(c.id)}
-                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted"
-              >
-                <span className="text-muted-foreground">
-                  {c.dateCreation.toLocaleDateString("fr-FR")} ·{" "}
-                  {c.lignes.length} ligne{c.lignes.length > 1 ? "s" : ""}
-                </span>
-                <span className="font-medium">{c.total().toString()}</span>
-              </button>
-            </li>
+            <CommandeLigne
+              key={c.id}
+              commande={c}
+              exporterCommande={exporterCommande}
+              supprimerCommande={supprimerCommande}
+              cheminExport={session.dossierExport.valeur}
+              onSupprimee={onMaj}
+            />
           ))}
         </ul>
       )}
     </article>
+  );
+}
+
+function CommandeLigne({
+  commande,
+  exporterCommande,
+  supprimerCommande,
+  cheminExport,
+  onSupprimee,
+}: {
+  commande: Commande;
+  exporterCommande: ExporterCommandeUseCase;
+  supprimerCommande: SupprimerCommandeUseCase;
+  cheminExport: string;
+  onSupprimee: () => void;
+}) {
+  const [exportEnCours, setExportEnCours] = useState(false);
+
+  async function exporter(): Promise<void> {
+    setExportEnCours(true);
+    try {
+      const r = await exporterCommande.execute({ commandeId: commande.id });
+      toast.success(
+        `${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""} exporté${r.fichiersCrees > 1 ? "s" : ""}`,
+        { description: cheminExport },
+      );
+    } catch (err) {
+      toast.error("Export échoué", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setExportEnCours(false);
+    }
+  }
+
+  async function supprimer(): Promise<void> {
+    const confirme = window.confirm(
+      `Supprimer la commande "photo n°${commande.photoNumero} · ${commande.format.toDossierName()} · ×${commande.quantite}" ?`,
+    );
+    if (!confirme) return;
+    try {
+      await supprimerCommande.execute(commande.id);
+      toast.success("Commande supprimée");
+      onSupprimee();
+    } catch (err) {
+      toast.error("Suppression impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-muted">
+      <div className="flex flex-1 flex-col">
+        <span className="text-sm">
+          Photo n°{commande.photoNumero} · {commande.format.toDossierName()} · ×
+          {commande.quantite}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {commande.dateCreation.toLocaleDateString("fr-FR")} ·{" "}
+          {commande.montantUnitaire.toString()} / tirage →{" "}
+          {commande.total().toString()}
+        </span>
+      </div>
+      <Button
+        variant="outline"
+        onClick={exporter}
+        disabled={exportEnCours}
+      >
+        {exportEnCours ? "…" : "Exporter"}
+      </Button>
+      <Button variant="ghost" onClick={supprimer}>
+        Supprimer
+      </Button>
+    </li>
   );
 }

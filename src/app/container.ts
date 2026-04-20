@@ -1,5 +1,4 @@
 import { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
-import { AjouterLigneACommandeUseCase } from "@/domain/usecases/AjouterLigneACommande";
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
@@ -8,8 +7,7 @@ import { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
 import { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
-import { RetirerLigneDeCommandeUseCase } from "@/domain/usecases/RetirerLigneDeCommande";
-import { TrouverCommandeParIdUseCase } from "@/domain/usecases/TrouverCommandeParId";
+import { SupprimerCommandeUseCase } from "@/domain/usecases/SupprimerCommande";
 import { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMemory/InMemoryGrilleTarifaireParDefautProvider";
 import { TauriCommandeRepository } from "@/infrastructure/tauri/TauriCommandeRepository";
@@ -49,20 +47,15 @@ export const container = {
     sessionRepository,
     commandeRepository,
   ),
-  trouverCommandeParId: new TrouverCommandeParIdUseCase(commandeRepository),
   listerCommandesDeSession: new ListerCommandesDeSessionUseCase(
     commandeRepository,
   ),
-  ajouterLigneACommande: new AjouterLigneACommandeUseCase(
-    commandeRepository,
-    sessionRepository,
-  ),
-  retirerLigneDeCommande: new RetirerLigneDeCommandeUseCase(commandeRepository),
   exporterCommande: new ExporterCommandeUseCase(
     commandeRepository,
     sessionRepository,
     fileCopier,
   ),
+  supprimerCommande: new SupprimerCommandeUseCase(commandeRepository),
 
   dossierPicker,
 };
