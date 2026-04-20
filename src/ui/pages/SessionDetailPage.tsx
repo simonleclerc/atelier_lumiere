@@ -12,6 +12,7 @@ import { Montant } from "@/domain/value-objects/Montant";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
+import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import type { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
 import type { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
@@ -31,6 +32,7 @@ interface Props {
   ajouterTirage: AjouterTirageACommandeUseCase;
   retirerTirage: RetirerTirageDeCommandeUseCase;
   exporterCommande: ExporterCommandeUseCase;
+  exporterSession: ExporterSessionUseCase;
   dossierPicker: DossierPicker;
   onRetour: () => void;
 }
@@ -55,6 +57,7 @@ export function SessionDetailPage({
   ajouterTirage,
   retirerTirage,
   exporterCommande,
+  exporterSession,
   dossierPicker,
   onRetour,
 }: Props) {
@@ -203,7 +206,12 @@ export function SessionDetailPage({
         </p>
       </header>
 
-      <RecapSession session={session} commandes={commandes} />
+      <RecapSession
+        session={session}
+        commandes={commandes}
+        exporterSession={exporterSession}
+        onExport={recharger}
+      />
 
       <GrilleTarifaireEditor
         session={session}
@@ -327,10 +335,16 @@ export function SessionDetailPage({
 function RecapSession({
   session,
   commandes,
+  exporterSession,
+  onExport,
 }: {
   session: Session;
   commandes: readonly Commande[];
+  exporterSession: ExporterSessionUseCase;
+  onExport: () => void;
 }) {
+  const [exportEnCours, setExportEnCours] = useState(false);
+
   const caTotal = commandes.reduce(
     (somme, c) => somme.ajouter(c.total(session.grilleTarifaire)),
     new Montant(0),
@@ -340,9 +354,54 @@ function RecapSession({
 
   if (commandes.length === 0) return null;
 
+  async function exporterTout(): Promise<void> {
+    if (commandes.length > 3) {
+      const confirme = window.confirm(
+        `Exporter les ${commandes.length} commandes de cette session vers ${session.dossierExport.valeur} ?`,
+      );
+      if (!confirme) return;
+    }
+    setExportEnCours(true);
+    try {
+      const r = await exporterSession.execute({ sessionId: session.id });
+      const cheminMsg = session.dossierExport.valeur;
+      if (r.erreurs.length === 0) {
+        toast.success(
+          `${r.commandesReussies} commande${r.commandesReussies > 1 ? "s" : ""} · ${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""} exporté${r.fichiersCrees > 1 ? "s" : ""}`,
+          { description: cheminMsg },
+        );
+      } else {
+        const details = r.erreurs
+          .map((e) => {
+            const ach = session.acheteurs.find((a) => a.id === e.acheteurId);
+            return `• ${ach?.nom ?? e.acheteurId} : ${e.message}`;
+          })
+          .join("\n");
+        toast.warning(
+          `${r.commandesReussies}/${r.commandesTotales} commandes exportées · ${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""}`,
+          { description: details, duration: 10000 },
+        );
+      }
+      onExport();
+    } catch (err) {
+      toast.error("Export de la session impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setExportEnCours(false);
+    }
+  }
+
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
-      <h2 className="text-lg font-semibold">Récapitulatif</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Récapitulatif</h2>
+        <Button onClick={exporterTout} disabled={exportEnCours}>
+          {exportEnCours
+            ? "Export…"
+            : `Exporter toute la session (${commandes.length})`}
+        </Button>
+      </div>
       <dl className="grid grid-cols-3 gap-3">
         <div className="flex flex-col">
           <dt className="text-xs text-muted-foreground">Chiffre d'affaires</dt>

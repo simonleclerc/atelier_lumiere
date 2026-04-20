@@ -11,8 +11,9 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 
 ## Synchronisation export ↔ commandes
 
-- [ ] Resynchroniser l'export d'une commande pour un acheteur
-- [ ] Resynchroniser l'export de toute une session
+- [ ] Resynchroniser l'export d'une commande pour un acheteur <!-- aujourd'hui le bouton Exporter de chaque commande est idempotent (écrase), il ne nettoie pas les anciens fichiers si des tirages ont été retirés — reste à faire -->
+- [x] Resynchroniser l'export de toute une session <!-- bouton Exporter toute la session, continue sur échec partiel avec rapport détaillé -->
+
 - [ ] Voir si l'export est à jour pour une commande (diff commande ↔ fichiers exportés)
 - [ ] Voir si l'export est à jour pour toutes les commandes d'une session
 - [ ] Rescanner le dossier source (si les photos dedans ont changé)

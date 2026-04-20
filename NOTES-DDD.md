@@ -318,6 +318,33 @@ Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs mé
 
 ---
 
+## Slice bonus — Export global d'une session (use case orchestrateur)
+
+**Valeur métier** : un seul clic pour exporter les commandes de TOUS les acheteurs d'une session. Avant : N clics pour N acheteurs.
+
+**Livrables** :
+- Use case `ExporterSessionUseCase` qui **délègue à `ExporterCommandeUseCase`** en boucle, sans duplication de logique
+- Gestion d'échecs partiels : si une commande échoue (photo manquante, etc.), les autres continuent. Rapport agrégé `{ commandesTotales, commandesReussies, fichiersCrees, erreurs[] }`
+- UI : bouton « Exporter toute la session (N) » dans la carte `RecapSession`, avec confirmation `window.confirm` si plus de 3 commandes (évite le clic accidentel). Toast succès vert si tout passe, toast jaune (warning) avec détails listés si certaines échouent.
+
+### Pattern DDD introduit
+
+#### Use case orchestrateur — composition d'un use case par un autre
+
+`ExporterSessionUseCase` reçoit en dépendance `ExporterCommandeUseCase` et l'appelle en boucle. Légitime en Clean Architecture tant que :
+- La **direction d'appel est unidirectionnelle** (orchestrateur → unité, jamais l'inverse). Pas de cycle.
+- Les deux use cases vivent dans la **même couche applicative** (ici `domain/usecases/`).
+
+Alternative rejetée : dupliquer la logique d'export dans `ExporterSession`. Cela aurait divergé dans le temps (deux endroits à maintenir). En déléguant, on obtient la même qualité d'export par commande, gratuitement, et un seul endroit à faire évoluer.
+
+#### Tolérance aux échecs partiels, rapport agrégé
+
+Un orchestrateur qui boucle sur N unités doit choisir entre deux politiques : **fail-fast** (stop au premier échec) ou **continue-and-report** (continue, agrège les erreurs). Règle à retenir : **continue-and-report quand les unités sont indépendantes**. Ici, la commande de Martin n'a aucun lien transactionnel avec celle d'Alice — si l'une échoue, les autres peuvent et doivent quand même réussir. Le rapport `erreurs[]` rend les échecs observables et actionnables côté UI.
+
+À l'inverse, si l'on voulait garantir une cohérence transactionnelle (« soit tout est exporté, soit rien »), il faudrait fail-fast + rollback — mais le métier ici ne le demande pas, et l'effort serait hors proportion (pas de vraie transaction sur le filesystem).
+
+---
+
 ## Slice bonus — Backup / restore
 
 **Valeur métier** : c'est un outil local. Sans backup, un crash disque ou un changement de Mac fait perdre tout le travail. Bouton « Sauvegarder » et « Importer » sur la liste des sessions.

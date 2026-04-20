@@ -3,6 +3,7 @@ import { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageAC
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
+import { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
 import { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
@@ -34,6 +35,13 @@ const grilleParDefaut = new InMemoryGrilleTarifaireParDefautProvider();
 const dossierPicker = new TauriDossierPicker();
 const sauvegardeFichierPicker = new TauriSauvegardeFichierPicker();
 
+// Extrait en variable pour que `ExporterSessionUseCase` puisse le composer.
+const exporterCommande = new ExporterCommandeUseCase(
+  commandeRepository,
+  sessionRepository,
+  fileCopier,
+);
+
 export const container = {
   creerSession: new CreerSessionUseCase(
     sessionRepository,
@@ -59,10 +67,10 @@ export const container = {
   listerCommandesDeSession: new ListerCommandesDeSessionUseCase(
     commandeRepository,
   ),
-  exporterCommande: new ExporterCommandeUseCase(
+  exporterCommande,
+  exporterSession: new ExporterSessionUseCase(
     commandeRepository,
-    sessionRepository,
-    fileCopier,
+    exporterCommande,
   ),
   supprimerCommande: new SupprimerCommandeUseCase(commandeRepository),
 

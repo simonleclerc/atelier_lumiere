@@ -13,6 +13,7 @@ import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTir
 import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
+import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import type { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 import type { SauvegardeFichierPicker } from "@/ui/ports/SauvegardeFichierPicker";
@@ -30,6 +31,7 @@ interface AppProps {
   ajouterTirageACommande: AjouterTirageACommandeUseCase;
   retirerTirageDeCommande: RetirerTirageDeCommandeUseCase;
   exporterCommande: ExporterCommandeUseCase;
+  exporterSession: ExporterSessionUseCase;
   exporterSauvegarde: ExporterSauvegardeUseCase;
   importerSauvegarde: ImporterSauvegardeUseCase;
   dossierPicker: DossierPicker;
@@ -50,6 +52,7 @@ function App({
   ajouterTirageACommande,
   retirerTirageDeCommande,
   exporterCommande,
+  exporterSession,
   exporterSauvegarde,
   importerSauvegarde,
   dossierPicker,
@@ -84,6 +87,7 @@ function App({
             ajouterTirage={ajouterTirageACommande}
             retirerTirage={retirerTirageDeCommande}
             exporterCommande={exporterCommande}
+            exporterSession={exporterSession}
             dossierPicker={dossierPicker}
             onRetour={() => setVue({ nom: "liste" })}
           />
