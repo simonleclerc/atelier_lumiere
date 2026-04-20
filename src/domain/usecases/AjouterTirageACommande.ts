@@ -11,21 +11,24 @@ import {
 /**
  * Use case — ajoute un tirage à la commande d'un acheteur d'une session.
  *
- * Trois règles cross-aggregate vérifiées ICI :
+ * Deux règles cross-aggregate vérifiées ICI :
  *  1. L'acheteur appartient bien à la session
  *  2. La photo existe bien dans la session
- *  3. Le montant unitaire est capturé en SNAPSHOT depuis la grille de la
- *     session au moment de l'ajout
  *
- * **Pattern UPSERT** : la contrainte métier "une seule Commande par
+ * **Pas de snapshot du prix** : le Tirage ne stocke plus de
+ * `montantUnitaire` (cf. doc de l'entité). Le prix est lu à la volée
+ * dans `session.grilleTarifaire` au moment du calcul d'un total. Modifier
+ * la grille plus tard affecte immédiatement les commandes existantes —
+ * comportement voulu tant qu'on n'a pas de factures.
+ *
+ * **Pattern UPSERT** : la contrainte "une seule Commande par
  * (sessionId, acheteurId)" est garantie ici via `findByAcheteur`. Si
- * aucune commande n'existe pour ce couple, on en crée une vide, sinon on
- * réutilise l'existante. La création de la Commande est ainsi IMPLICITE —
- * elle n'a pas de use case dédié, elle naît au premier tirage.
+ * aucune commande n'existe, on en crée une vide ; sinon on réutilise
+ * l'existante. La création de la Commande est IMPLICITE — pas de use
+ * case dédié, elle naît au premier tirage.
  *
- * La consolidation d'un tirage avec même (photo, format) est déléguée à
- * l'agrégat (`commande.ajouterTirage`) — c'est un invariant d'agrégat,
- * pas de use case.
+ * Consolidation si même (photo, format) : déléguée à l'agrégat
+ * (`commande.ajouterTirage`). C'est un invariant d'agrégat, pas de use case.
  */
 export interface AjouterTirageACommandeEntree {
   readonly sessionId: string;
@@ -65,8 +68,9 @@ export class AjouterTirageACommandeUseCase {
       );
     }
 
+    // On construit le VO Format pour valider la chaîne dès l'entrée du
+    // use case (erreur claire si le client envoie un format bidon).
     const format = Format.depuis(entree.format);
-    const montantUnitaire = session.grilleTarifaire.prixPour(format);
 
     const existante = await this.commandeRepository.findByAcheteur(
       entree.sessionId,
@@ -83,7 +87,6 @@ export class AjouterTirageACommandeUseCase {
       photoNumero: entree.photoNumero,
       format,
       quantite: entree.quantite,
-      montantUnitaire,
     });
 
     await this.commandeRepository.save(commande);

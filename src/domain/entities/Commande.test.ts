@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Format } from "../value-objects/Format";
+import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
 import {
   Commande,
@@ -11,13 +12,22 @@ function commandeDemo(): Commande {
   return Commande.creer({ sessionId: "sess-1", acheteurId: "ach-1" });
 }
 
+function grille(): GrilleTarifaire {
+  return new GrilleTarifaire([
+    [Format._15x23, new Montant(800)],
+    [Format._20x30, new Montant(1200)],
+    [Format._30x45, new Montant(1800)],
+    [Format.NUMERIQUE, new Montant(500)],
+  ]);
+}
+
 describe("Commande (agrégat racine avec tirages)", () => {
   it("se crée vide", () => {
     const c = commandeDemo();
     expect(c.id).toBeTruthy();
     expect(c.tirages).toHaveLength(0);
     expect(c.estVide()).toBe(true);
-    expect(c.total().centimes).toBe(0);
+    expect(c.total(grille()).centimes).toBe(0);
   });
 
   it("refuse sessionId vide", () => {
@@ -39,7 +49,6 @@ describe("Commande (agrégat racine avec tirages)", () => {
         photoNumero: 145,
         format: Format._20x30,
         quantite: 2,
-        montantUnitaire: new Montant(1200),
       });
       expect(c.tirages).toHaveLength(1);
       expect(c.tirages[0].id).toBe(t.id);
@@ -51,18 +60,15 @@ describe("Commande (agrégat racine avec tirages)", () => {
         photoNumero: 145,
         format: Format._20x30,
         quantite: 1,
-        montantUnitaire: new Montant(1200),
       });
       const t2 = c.ajouterTirage({
         photoNumero: 145,
         format: Format._20x30,
         quantite: 2,
-        montantUnitaire: new Montant(9999), // ignoré, on garde le snapshot d'origine
       });
       expect(c.tirages).toHaveLength(1);
       expect(t2.id).toBe(t1.id);
       expect(c.tirages[0].quantite).toBe(3);
-      expect(c.tirages[0].montantUnitaire.centimes).toBe(1200);
     });
 
     it("distingue deux tirages avec même photo mais formats différents", () => {
@@ -71,13 +77,11 @@ describe("Commande (agrégat racine avec tirages)", () => {
         photoNumero: 145,
         format: Format._20x30,
         quantite: 1,
-        montantUnitaire: new Montant(1200),
       });
       c.ajouterTirage({
         photoNumero: 145,
         format: Format._15x23,
         quantite: 1,
-        montantUnitaire: new Montant(800),
       });
       expect(c.tirages).toHaveLength(2);
     });
@@ -90,13 +94,11 @@ describe("Commande (agrégat racine avec tirages)", () => {
         photoNumero: 1,
         format: Format._20x30,
         quantite: 1,
-        montantUnitaire: new Montant(1200),
       });
       c.ajouterTirage({
         photoNumero: 2,
         format: Format._20x30,
         quantite: 1,
-        montantUnitaire: new Montant(1200),
       });
       const { devenueVide } = c.retirerTirage(t1.id);
       expect(devenueVide).toBe(false);
@@ -109,7 +111,6 @@ describe("Commande (agrégat racine avec tirages)", () => {
         photoNumero: 1,
         format: Format._20x30,
         quantite: 1,
-        montantUnitaire: new Montant(1200),
       });
       const { devenueVide } = c.retirerTirage(t.id);
       expect(devenueVide).toBe(true);
@@ -123,22 +124,35 @@ describe("Commande (agrégat racine avec tirages)", () => {
   });
 
   describe("total / nombreTirages", () => {
-    it("cumule sur tous les tirages", () => {
+    it("cumule sur tous les tirages avec les prix de la grille donnée", () => {
       const c = commandeDemo();
       c.ajouterTirage({
         photoNumero: 1,
         format: Format._20x30,
         quantite: 2,
-        montantUnitaire: new Montant(1200),
       });
       c.ajouterTirage({
         photoNumero: 2,
         format: Format._15x23,
         quantite: 3,
-        montantUnitaire: new Montant(800),
       });
       expect(c.nombreTirages()).toBe(5);
-      expect(c.total().centimes).toBe(2400 + 2400);
+      expect(c.total(grille()).centimes).toBe(2400 + 2400);
+    });
+
+    it("reflète un changement de grille (pas de snapshot figé)", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 1,
+        format: Format._20x30,
+        quantite: 2,
+      });
+      expect(c.total(grille()).centimes).toBe(2400);
+      const nouvelleGrille = grille().avecPrixModifie(
+        Format._20x30,
+        new Montant(2000),
+      );
+      expect(c.total(nouvelleGrille).centimes).toBe(4000);
     });
   });
 
@@ -149,13 +163,11 @@ describe("Commande (agrégat racine avec tirages)", () => {
         photoNumero: 145,
         format: Format._20x30,
         quantite: 2,
-        montantUnitaire: new Montant(1200),
       });
       c.ajouterTirage({
         photoNumero: 7,
         format: Format.NUMERIQUE,
         quantite: 1,
-        montantUnitaire: new Montant(500),
       });
       const instructions = c.nomsFichiersExport("Martin Dupont");
       expect(instructions).toEqual([

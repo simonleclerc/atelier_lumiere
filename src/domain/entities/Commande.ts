@@ -1,25 +1,31 @@
 import type { Format } from "../value-objects/Format";
+import type { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
 import { Tirage } from "./Tirage";
 
 /**
  * Agrégat racine — la commande d'UN acheteur dans UNE session.
  *
- * Contrainte métier cruciale : il y a au plus UNE commande par couple
- * `(sessionId, acheteurId)`. C'est une règle **cross-aggregate** (Commande
- * et Session sont deux agrégats distincts), garantie par le use case
- * `AjouterTirageACommande` qui fait un upsert via
+ * Contrainte métier : il y a au plus UNE commande par couple
+ * `(sessionId, acheteurId)`. C'est une règle **cross-aggregate**, garantie
+ * par le use case `AjouterTirageACommande` qui fait un upsert via
  * `CommandeRepository.findByAcheteur`.
  *
- * Contenu : une collection de **Tirages** (terme métier du photographe,
- * pas "lignes"). Invariant d'agrégat : unicité de `(photoNumero, format)`
- * dans les tirages — à l'ajout, si le couple existe déjà, on consolide
- * en incrémentant la quantité plutôt que de créer un doublon.
+ * Contenu : une collection de **Tirages**. Invariant d'agrégat : unicité
+ * de `(photoNumero, format)` dans les tirages — à l'ajout, si le couple
+ * existe déjà, on consolide en incrémentant la quantité plutôt que de
+ * créer un doublon.
+ *
+ * **Pas de prix stocké** sur les tirages (tant qu'on n'a pas de facture).
+ * Les méthodes `total` et `totalPourTirage` prennent la `GrilleTarifaire`
+ * en paramètre et lisent les prix à la volée — conséquence : modifier la
+ * grille d'une session fait bouger immédiatement les totaux des commandes
+ * existantes. Quand on introduira les factures, on figera le snapshot
+ * sur l'entité `Facture`, pas ici.
  *
  * Cycle de vie implicite : la Commande naît quand on lui ajoute son
- * premier tirage, et doit être supprimée quand on retire son dernier
- * (pour éviter les commandes fantômes vides). `retirerTirage` signale
- * au use case appelant via son booléen de retour.
+ * premier tirage, et doit être supprimée quand on retire son dernier.
+ * `retirerTirage` signale via son booléen de retour.
  */
 export class TirageIntrouvable extends Error {
   constructor(tirageId: string) {
@@ -88,18 +94,11 @@ export class Commande {
    * Ajoute un tirage à la commande, avec CONSOLIDATION : si un tirage
    * existant a le même `(photoNumero, format)`, sa quantité est
    * incrémentée. Sinon on crée un nouveau Tirage.
-   *
-   * Le `montantUnitaire` passé est utilisé uniquement si on crée un
-   * nouveau Tirage — la consolidation ne re-calcule pas le prix, on
-   * conserve celui du snapshot d'origine. Règle métier : si la grille a
-   * changé entre l'ajout initial et la consolidation, le prix unitaire
-   * de la consolidation reste celui du premier ajout.
    */
   ajouterTirage(params: {
     photoNumero: number;
     format: Format;
     quantite: number;
-    montantUnitaire: Montant;
   }): Tirage {
     const indexExistant = this._tirages.findIndex((t) =>
       t.egaleContenu(params.photoNumero, params.format),
@@ -115,7 +114,6 @@ export class Commande {
       photoNumero: params.photoNumero,
       format: params.format,
       quantite: params.quantite,
-      montantUnitaire: params.montantUnitaire,
     });
     this._tirages.push(nouveau);
     return nouveau;
@@ -126,8 +124,7 @@ export class Commande {
    *
    * Retourne `{ devenueVide: true }` si la commande n'a plus aucun tirage
    * après le retrait, pour signaler au use case appelant qu'il peut
-   * supprimer la Commande elle-même (création et suppression implicites
-   * forment un couple cohérent).
+   * supprimer la Commande elle-même.
    */
   retirerTirage(tirageId: string): { devenueVide: boolean } {
     const index = this._tirages.findIndex((t) => t.id === tirageId);
@@ -140,9 +137,14 @@ export class Commande {
     return this._tirages.length === 0;
   }
 
-  total(): Montant {
+  /**
+   * Total de la commande, lu à la volée dans la grille. Si la grille
+   * change, le total change aussi — comportement voulu tant qu'on n'a
+   * pas de factures.
+   */
+  total(grille: GrilleTarifaire): Montant {
     return this._tirages.reduce(
-      (somme, t) => somme.ajouter(t.total()),
+      (somme, t) => somme.ajouter(t.total(grille)),
       new Montant(0),
     );
   }

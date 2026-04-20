@@ -1,4 +1,5 @@
 import { Format } from "../value-objects/Format";
+import type { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
 
 /**
@@ -9,13 +10,14 @@ import { Montant } from "../value-objects/Montant";
  * désigner une rangée d'affichage.
  *
  * Un Tirage c'est une photo donnée, dans un format donné, en une quantité
- * donnée, avec un prix unitaire FIGÉ au moment de la création (pattern
- * snapshot). Si le copain ajuste la grille tarifaire plus tard, ce tirage
- * garde son prix d'origine.
+ * donnée. **Pas de prix capturé sur le tirage** : tant qu'on n'a pas de
+ * factures, on veut que modifier la grille d'une session se reflète
+ * immédiatement sur toutes les commandes (pas de snapshot figé). Le prix
+ * se calcule à la volée depuis la grille de la Session, d'où la signature
+ * `total(grille)`.
  *
- * Pourquoi entité et pas VO ? Parce qu'on veut pouvoir référencer, consolider
- * ou retirer un tirage précis par son id. Deux tirages peuvent exister dans
- * la commande avec des contenus différents — chacun a son identité propre.
+ * Quand on introduira la facturation (slice future), on capturera le
+ * snapshot au moment de la facturation sur l'entité `Facture`, pas ici.
  *
  * Contrainte d'unicité au niveau de la COMMANDE (pas de l'entité) :
  * `(photoNumero, format)` est unique dans une commande. Invariant porté
@@ -26,7 +28,6 @@ export interface TirageDonnees {
   readonly photoNumero: number;
   readonly format: Format;
   readonly quantite: number;
-  readonly montantUnitaire: Montant;
 }
 
 export class Tirage {
@@ -34,7 +35,6 @@ export class Tirage {
   readonly photoNumero: number;
   readonly format: Format;
   readonly quantite: number;
-  readonly montantUnitaire: Montant;
 
   constructor(donnees: TirageDonnees) {
     if (!donnees.id.trim()) {
@@ -55,14 +55,12 @@ export class Tirage {
     this.photoNumero = donnees.photoNumero;
     this.format = donnees.format;
     this.quantite = donnees.quantite;
-    this.montantUnitaire = donnees.montantUnitaire;
   }
 
   static creer(params: {
     photoNumero: number;
     format: Format;
     quantite: number;
-    montantUnitaire: Montant;
     id?: string;
   }): Tirage {
     return new Tirage({
@@ -70,12 +68,19 @@ export class Tirage {
       photoNumero: params.photoNumero,
       format: params.format,
       quantite: params.quantite,
-      montantUnitaire: params.montantUnitaire,
     });
   }
 
-  total(): Montant {
-    return this.montantUnitaire.multiplierPar(this.quantite);
+  /**
+   * Prix unitaire lu dans la grille passée en paramètre. Méthode pure :
+   * aucun prix n'est stocké sur le Tirage, on lit à la demande.
+   */
+  montantUnitaire(grille: GrilleTarifaire): Montant {
+    return grille.prixPour(this.format);
+  }
+
+  total(grille: GrilleTarifaire): Montant {
+    return this.montantUnitaire(grille).multiplierPar(this.quantite);
   }
 
   /** True si ce Tirage a le même (photoNumero, format) — sert à la consolidation. */
@@ -89,7 +94,6 @@ export class Tirage {
       photoNumero: this.photoNumero,
       format: this.format,
       quantite: this.quantite + quantiteAjoutee,
-      montantUnitaire: this.montantUnitaire,
     });
   }
 }

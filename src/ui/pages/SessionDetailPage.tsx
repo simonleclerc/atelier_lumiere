@@ -97,7 +97,9 @@ export function SessionDetailPage({
   const acheteursTries = useMemo(() => {
     if (!session) return [];
     const ca = (acheteurId: string) =>
-      commandeParAcheteur.get(acheteurId)?.total().centimes ?? 0;
+      commandeParAcheteur
+        .get(acheteurId)
+        ?.total(session.grilleTarifaire).centimes ?? 0;
     const photos = (acheteurId: string) =>
       commandeParAcheteur.get(acheteurId)?.nombreTirages() ?? 0;
 
@@ -330,7 +332,7 @@ function RecapSession({
   commandes: readonly Commande[];
 }) {
   const caTotal = commandes.reduce(
-    (somme, c) => somme.ajouter(c.total()),
+    (somme, c) => somme.ajouter(c.total(session.grilleTarifaire)),
     new Montant(0),
   );
   const tiragesTotal = commandes.reduce((n, c) => n + c.nombreTirages(), 0);
@@ -386,7 +388,7 @@ function AcheteurCard({
   const [exportEnCours, setExportEnCours] = useState(false);
 
   const nombreTirages = commande?.nombreTirages() ?? 0;
-  const total = commande?.total() ?? new Montant(0);
+  const total = commande?.total(session.grilleTarifaire) ?? new Montant(0);
 
   async function exporter(): Promise<void> {
     if (!commande) return;
@@ -464,8 +466,8 @@ function AcheteurCard({
                     {t.quantite}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {t.montantUnitaire.toString()} / tirage →{" "}
-                    {t.total().toString()}
+                    {t.montantUnitaire(session.grilleTarifaire).toString()} /
+                    tirage → {t.total(session.grilleTarifaire).toString()}
                   </span>
                 </div>
                 <Button

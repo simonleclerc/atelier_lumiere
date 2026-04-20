@@ -46,13 +46,11 @@ function setup() {
     photoNumero: 145,
     format: Format._20x30,
     quantite: 3,
-    montantUnitaire: new Montant(1200),
   });
   commande.ajouterTirage({
     photoNumero: 1,
     format: Format.NUMERIQUE,
     quantite: 1,
-    montantUnitaire: new Montant(500),
   });
   return { session, commande };
 }

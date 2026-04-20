@@ -5,7 +5,7 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 ## Édition de l'existant
 
 - [x] Éditer une session : dossiers source/export, référent, et tout ce qu'on crée au départ <!-- ne rescanne pas le dossier source — séparé, cf section Synchro -->
-- [ ] Si la grille tarifaire change, mettre à jour les commandes et leur prix (à préciser quand la facture existera — snapshot figé après facturation)
+- [x] Si la grille tarifaire change, mettre à jour les commandes et leur prix (à préciser quand la facture existera — snapshot figé après facturation)
 - [x] Modifier un acheteur (nom, email, téléphone) avec revalidation de l'unicité dans la session
 - [ ] Si le nom d'un acheteur change après export : renommer ou supprimer les anciens fichiers pour ne pas laisser d'orphelins sur le disque
 

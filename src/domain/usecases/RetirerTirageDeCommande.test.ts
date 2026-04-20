@@ -5,7 +5,6 @@ import {
   type CommandeRepository,
 } from "../ports/CommandeRepository";
 import { Format } from "../value-objects/Format";
-import { Montant } from "../value-objects/Montant";
 import { RetirerTirageDeCommandeUseCase } from "./RetirerTirageDeCommande";
 
 class InMemoryCommandeRepo implements CommandeRepository {
@@ -48,13 +47,11 @@ describe("RetirerTirageDeCommandeUseCase", () => {
       photoNumero: 1,
       format: Format._20x30,
       quantite: 1,
-      montantUnitaire: new Montant(1200),
     });
     commande.ajouterTirage({
       photoNumero: 2,
       format: Format._20x30,
       quantite: 1,
-      montantUnitaire: new Montant(1200),
     });
     const repo = new InMemoryCommandeRepo([commande]);
     const useCase = new RetirerTirageDeCommandeUseCase(repo);
@@ -75,7 +72,6 @@ describe("RetirerTirageDeCommandeUseCase", () => {
       photoNumero: 1,
       format: Format._20x30,
       quantite: 1,
-      montantUnitaire: new Montant(1200),
     });
     const repo = new InMemoryCommandeRepo([commande]);
     const useCase = new RetirerTirageDeCommandeUseCase(repo);
@@ -95,7 +91,6 @@ describe("RetirerTirageDeCommandeUseCase", () => {
       photoNumero: 1,
       format: Format._20x30,
       quantite: 1,
-      montantUnitaire: new Montant(1200),
     });
     const repo = new InMemoryCommandeRepo([commande]);
     const useCase = new RetirerTirageDeCommandeUseCase(repo);

@@ -145,7 +145,7 @@ describe("AjouterTirageACommandeUseCase (upsert cross-aggregate)", () => {
     expect(r.commande.tirages[0].quantite).toBe(3);
   });
 
-  it("capture le montant snapshot au premier ajout (et le conserve à la consolidation)", async () => {
+  it("le total reflète la grille live (pas de snapshot figé)", async () => {
     const { session, acheteurId } = setup();
     const sRepo = new InMemorySessionRepo([session]);
     const cRepo = new InMemoryCommandeRepo();
@@ -156,22 +156,15 @@ describe("AjouterTirageACommandeUseCase (upsert cross-aggregate)", () => {
       acheteurId,
       photoNumero: 1,
       format: "20x30",
-      quantite: 1,
-    });
-
-    session.modifierPrix(Format._20x30, new Montant(9999));
-    await sRepo.save(session);
-
-    const r = await useCase.execute({
-      sessionId: session.id,
-      acheteurId,
-      photoNumero: 1,
-      format: "20x30",
       quantite: 2,
     });
-    // Consolidation garde le prix d'origine
-    expect(r.commande.tirages[0].montantUnitaire.centimes).toBe(1200);
-    expect(r.commande.tirages[0].quantite).toBe(3);
+    const avant = (await cRepo.findByAcheteur(session.id, acheteurId))!;
+    expect(avant.total(session.grilleTarifaire).centimes).toBe(2400);
+
+    // Le copain ajuste le prix après coup — la commande suit.
+    session.modifierPrix(Format._20x30, new Montant(2000));
+    const apres = (await cRepo.findByAcheteur(session.id, acheteurId))!;
+    expect(apres.total(session.grilleTarifaire).centimes).toBe(4000);
   });
 
   it("rejette si l'acheteur n'appartient pas à la session", async () => {

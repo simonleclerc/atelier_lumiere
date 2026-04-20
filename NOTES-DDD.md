@@ -18,7 +18,7 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 | **Référent** | Champ texte sur Session | Contact côté commanditaire. |
 | **Acheteur** | Entité fille de Session | Particulier/pro qui achète des tirages. Rattaché à une session, pas réutilisable cross-session. |
 | **Commande** | Agrégat racine | **Une seule commande par couple `(sessionId, acheteurId)`**. Contient une collection de **Tirages**. Cycle de vie implicite : naît au premier tirage ajouté, disparaît quand le dernier est retiré. |
-| **Tirage** | Entité fille de Commande | `{ id, photoNumero, format, quantite, montantUnitaire snapshot }`. Le terme « ligne » est banni du domaine (réservé à l'UI pour parler d'une rangée). Invariant d'agrégat : unicité de `(photoNumero, format)` dans les tirages d'une commande — la consolidation (incrément de quantité) se fait si un doublon arrive. |
+| **Tirage** | Entité fille de Commande | `{ id, photoNumero, format, quantite }`. **Pas de prix stocké** (tant qu'on n'a pas de facture — le prix est lu à la volée dans la grille de la session). Le terme « ligne » est banni du domaine (réservé à l'UI pour parler d'une rangée). Invariant d'agrégat : unicité de `(photoNumero, format)` dans les tirages d'une commande — la consolidation (incrément de quantité) se fait si un doublon arrive. |
 | **Format** | VO | Catalogue fermé : `15x23`, `20x30`, `30x45`, `Numerique`. |
 | **Montant** | VO | Centimes d'euros (jamais de float pour de l'argent). |
 | **GrilleTarifaire** | VO dans Session | Mapping Format → Montant, ajustable par session via `Session.modifierPrix`. |
@@ -43,8 +43,8 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 │  ├── sessionId (référence par ID)                        │
 │  ├── acheteurId (référence par ID, acheteur de la session) │
 │  └── Tirage[] (entités filles, identité = id)            │
-│       ├── photoNumero + format + quantite                │
-│       └── montantUnitaire SNAPSHOT (figé à la création)  │
+│       └── photoNumero + format + quantite                │
+│          (prix NON stocké — lu à la volée dans la grille)│
 │                                                          │
 │  Création et suppression implicites :                    │
 │   • naît quand on ajoute son premier tirage              │
@@ -315,6 +315,34 @@ Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs mé
 #### Réutilisation d'une erreur cross-aggregate
 
 `ExporterCommande` réutilise `AcheteurNAppartientPasASession` (déjà définie dans `PasserCommande.ts`) quand l'acheteur a disparu de la session entre le moment de la commande et le moment de l'export. Même sémantique métier, pas de duplication — on importe. Si le pattern se multiplie, on factorisera dans un fichier d'erreurs partagées.
+
+---
+
+## Slice refacto — Prix live (plus de snapshot tant qu'il n'y a pas de facture)
+
+**Décision métier** (2026-04-21) : tant qu'on n'a pas de facturation, on ne veut **pas** de snapshot de prix sur les tirages. Si le copain ajuste la grille tarifaire d'une session, les commandes existantes doivent immédiatement refléter les nouveaux prix.
+
+**Impact code** :
+- `Tirage` perd son champ `montantUnitaire` — méthodes `montantUnitaire(grille)` et `total(grille)` prennent désormais la `GrilleTarifaire` en argument et lisent à la volée
+- `Commande.total(grille)` et `ajouterTirage({photo, format, quantite})` — plus de prix à passer
+- `AjouterTirageACommandeUseCase` ne calcule plus de snapshot — il orchestre juste la validation cross-aggregate et l'upsert
+- `TauriCommandeRepository` : schéma JSON débarrassé de `centimesUnitaire`. Anciens JSON avec ce champ en trop sont acceptés (champ ignoré silencieusement)
+- UI : tous les calculs de total passent `session.grilleTarifaire` explicitement — `commande.total(session.grilleTarifaire)`, `t.montantUnitaire(session.grilleTarifaire)`
+
+### Pattern DDD introduit
+
+#### « Prix live » vs pattern snapshot — choisir selon le contexte de l'invariant temporel
+
+Le pattern snapshot (figer une valeur dérivée à la création) et son opposé (recalculer à la demande) sont tous deux légitimes, mais pas interchangeables. Le choix dépend d'**une question unique** : est-ce qu'un tiers externe (un client, le fisc, un comptable) a déjà pris connaissance de la valeur figée ?
+
+- Tant qu'**aucune facture n'est émise**, personne n'a figé contractuellement le prix de la commande. On peut ajuster une erreur de grille sans casser d'engagement. → **prix live** (mode actuel).
+- Dès qu'une **facture est émise** (avec numéro continu + remise au client), le prix est gravé. Changer la grille ne doit plus jamais toucher une facture existante. → **snapshot figé** (sur l'entité `Facture` à venir).
+
+**Règle à retenir** : un snapshot est utile quand il y a un *événement de verrouillage* (facturation, livraison, publication). En amont de ce verrouillage, coller au live est plus simple et correspond mieux à l'intention métier (« je me suis trompé sur un prix, je corrige pour tout le monde »).
+
+Conséquence signature : une méthode qui calcule un prix (`total`, `montantUnitaire`) prend la grille en paramètre quand on est en mode live. Si on passe une collaboration d'entité-qui-appelle-grille, on doit décider si la dépendance vient de l'extérieur (plus DDD pur) ou si l'entité tient une référence (plus ergonomique). On a retenu **la signature méthode-qui-reçoit-la-grille** : l'agrégat reste pur, le caller compose.
+
+**Pour la future slice Facture** : on introduira `Facture` comme agrégat séparé qui capture à sa création un snapshot de la `GrilleTarifaire` courante et des `Tirage` de la commande. La Facture sera inaltérable ; les Commandes en amont pourront continuer d'évoluer sans conséquence.
 
 ---
 

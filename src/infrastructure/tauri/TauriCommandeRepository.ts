@@ -13,16 +13,18 @@ import {
   type CommandeRepository,
 } from "@/domain/ports/CommandeRepository";
 import { Format } from "@/domain/value-objects/Format";
-import { Montant } from "@/domain/value-objects/Montant";
 
 /**
  * Adapter Tauri — persistance JSON dans `AppData/commandes.json`.
  *
  * Schéma : une commande a ses tirages embarqués sous la clé `tirages`
- * (aligne avec l'ubiquitous language métier — pas `lignes`). Tolérant
- * aux entrées obsolètes : celles qui ne matchent pas le schéma sont
- * ignorées avec un warning console, permettant une migration silencieuse
- * depuis la version d'hier (schéma plat une commande = un tirage).
+ * (aligne avec l'ubiquitous language métier). Les tirages ne stockent
+ * PAS de prix — le prix est lu dans la grille de la session à
+ * l'utilisation. Les anciens JSON avec `centimesUnitaire` sont acceptés :
+ * on ignore juste le champ.
+ *
+ * Tolérance aux entrées malformées (schéma vraiment obsolète) : skip +
+ * warning console, migration silencieuse depuis les versions antérieures.
  */
 const FICHIER = "commandes.json";
 
@@ -31,7 +33,6 @@ interface TirageJson {
   readonly photoNumero: number;
   readonly format: string;
   readonly quantite: number;
-  readonly centimesUnitaire: number;
 }
 
 interface CommandeJson {
@@ -142,8 +143,7 @@ function estTirageJson(item: unknown): item is TirageJson {
     typeof o.id === "string" &&
     typeof o.photoNumero === "number" &&
     typeof o.format === "string" &&
-    typeof o.quantite === "number" &&
-    typeof o.centimesUnitaire === "number"
+    typeof o.quantite === "number"
   );
 }
 
@@ -158,7 +158,6 @@ function toJson(commande: Commande): CommandeJson {
       photoNumero: t.photoNumero,
       format: t.format.toDossierName(),
       quantite: t.quantite,
-      centimesUnitaire: t.montantUnitaire.centimes,
     })),
   };
 }
@@ -176,7 +175,6 @@ function fromJson(raw: CommandeJson): Commande {
           photoNumero: t.photoNumero,
           format: Format.depuis(t.format),
           quantite: t.quantite,
-          montantUnitaire: new Montant(t.centimesUnitaire),
         }),
     ),
   });

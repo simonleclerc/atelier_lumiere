@@ -5,7 +5,6 @@ import {
   type CommandeRepository,
 } from "../ports/CommandeRepository";
 import { Format } from "../value-objects/Format";
-import { Montant } from "../value-objects/Montant";
 import { SupprimerCommandeUseCase } from "./SupprimerCommande";
 
 class InMemoryCommandeRepo implements CommandeRepository {
@@ -48,7 +47,6 @@ describe("SupprimerCommandeUseCase", () => {
       photoNumero: 1,
       format: Format._20x30,
       quantite: 2,
-      montantUnitaire: new Montant(1200),
     });
     const repo = new InMemoryCommandeRepo([commande]);
     const useCase = new SupprimerCommandeUseCase(repo);
