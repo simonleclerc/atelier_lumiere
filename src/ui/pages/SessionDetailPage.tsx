@@ -384,13 +384,15 @@ function RecapSession({
           { description: details, duration: 10000 },
         );
       }
-      onExport();
     } catch (err) {
       toast.error("Export de la session impossible", {
         description: err instanceof Error ? err.message : String(err),
       });
     } finally {
       setExportEnCours(false);
+      // Recharge toujours : certaines commandes peuvent avoir leur
+      // statut muté (complet ou erreur) même si la promesse globale rejette.
+      onExport();
     }
   }
 
@@ -471,6 +473,10 @@ function AcheteurCard({
       });
     } finally {
       setExportEnCours(false);
+      // Recharge la session dans les deux cas : le statut de la commande a
+      // été muté côté repo (complet sur succès, erreur sur échec) par le
+      // use case, l'UI doit le refléter.
+      onMaj();
     }
   }
 
