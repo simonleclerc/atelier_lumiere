@@ -26,16 +26,25 @@ class InMemoryCommandeRepo implements CommandeRepository {
       (c) => c.sessionId === sessionId,
     );
   }
+  async findByAcheteur(
+    sessionId: string,
+    acheteurId: string,
+  ): Promise<Commande | null> {
+    return (
+      Array.from(this.map.values()).find(
+        (c) => c.sessionId === sessionId && c.acheteurId === acheteurId,
+      ) ?? null
+    );
+  }
   async delete(id: string): Promise<void> {
     this.map.delete(id);
   }
 }
 
 describe("SupprimerCommandeUseCase", () => {
-  it("retire la commande du repo", async () => {
-    const commande = Commande.creer({
-      sessionId: "s",
-      acheteurId: "a",
+  it("retire la commande du repo (avec tous ses tirages)", async () => {
+    const commande = Commande.creer({ sessionId: "s", acheteurId: "a" });
+    commande.ajouterTirage({
       photoNumero: 1,
       format: Format._20x30,
       quantite: 2,

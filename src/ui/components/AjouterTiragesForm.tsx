@@ -2,22 +2,22 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
 import type { Session } from "@/domain/entities/Session";
-import type { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
+import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import { Format } from "@/domain/value-objects/Format";
 
 interface Props {
   session: Session;
   acheteurId: string;
-  passerCommande: PasserCommandeUseCase;
-  onAjoutees: () => void;
+  ajouterTirage: AjouterTirageACommandeUseCase;
+  onAjoutes: () => void;
   onAnnuler: () => void;
 }
 
-export function NouvelleCommandeForm({
+export function AjouterTiragesForm({
   session,
   acheteurId,
-  passerCommande,
-  onAjoutees,
+  ajouterTirage,
+  onAjoutes,
   onAnnuler,
 }: Props) {
   const [photosSaisie, setPhotosSaisie] = useState("");
@@ -36,24 +36,22 @@ export function NouvelleCommandeForm({
         );
       }
       const quantiteNum = Number(quantite);
-      let creees = 0;
       for (const n of numeros) {
-        await passerCommande.execute({
+        await ajouterTirage.execute({
           sessionId: session.id,
           acheteurId,
           photoNumero: n,
           format,
           quantite: quantiteNum,
         });
-        creees += 1;
       }
       toast.success(
-        `${creees} commande${creees > 1 ? "s" : ""} créée${creees > 1 ? "s" : ""}`,
+        `${numeros.length} photo${numeros.length > 1 ? "s" : ""} ajoutée${numeros.length > 1 ? "s" : ""}`,
         { description: `Format ${format} · quantité ${quantiteNum} par photo` },
       );
-      onAjoutees();
+      onAjoutes();
     } catch (err) {
-      toast.error("Création de commande impossible", {
+      toast.error("Ajout impossible", {
         description: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -66,7 +64,7 @@ export function NouvelleCommandeForm({
       onSubmit={soumettre}
       className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
     >
-      <h4 className="text-sm font-semibold">Nouvelle commande</h4>
+      <h4 className="text-sm font-semibold">Ajouter des photos</h4>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-1 flex-col gap-1 text-sm">
           Photo(s)

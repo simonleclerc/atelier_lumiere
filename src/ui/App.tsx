@@ -9,9 +9,9 @@ import type { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfo
 import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
-import type { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
+import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
+import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
-import type { SupprimerCommandeUseCase } from "@/domain/usecases/SupprimerCommande";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 import { Toaster } from "@/ui/components/ui/sonner";
 
@@ -24,9 +24,9 @@ interface AppProps {
   modifierPrixSession: ModifierPrixSessionUseCase;
   trouverSessionParId: TrouverSessionParIdUseCase;
   listerCommandesDeSession: ListerCommandesDeSessionUseCase;
-  passerCommande: PasserCommandeUseCase;
+  ajouterTirageACommande: AjouterTirageACommandeUseCase;
+  retirerTirageDeCommande: RetirerTirageDeCommandeUseCase;
   exporterCommande: ExporterCommandeUseCase;
-  supprimerCommande: SupprimerCommandeUseCase;
   dossierPicker: DossierPicker;
 }
 
@@ -41,9 +41,9 @@ function App({
   modifierPrixSession,
   trouverSessionParId,
   listerCommandesDeSession,
-  passerCommande,
+  ajouterTirageACommande,
+  retirerTirageDeCommande,
   exporterCommande,
-  supprimerCommande,
   dossierPicker,
 }: AppProps) {
   const [vue, setVue] = useState<Vue>({ nom: "liste" });
@@ -69,9 +69,9 @@ function App({
             modifierPrix={modifierPrixSession}
             trouverSession={trouverSessionParId}
             listerCommandes={listerCommandesDeSession}
-            passerCommande={passerCommande}
+            ajouterTirage={ajouterTirageACommande}
+            retirerTirage={retirerTirageDeCommande}
             exporterCommande={exporterCommande}
-            supprimerCommande={supprimerCommande}
             dossierPicker={dossierPicker}
             onRetour={() => setVue({ nom: "liste" })}
           />

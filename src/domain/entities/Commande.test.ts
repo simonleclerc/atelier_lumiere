@@ -1,75 +1,181 @@
 import { describe, it, expect } from "vitest";
 import { Format } from "../value-objects/Format";
 import { Montant } from "../value-objects/Montant";
-import { Commande, slugifierNomAcheteur } from "./Commande";
+import {
+  Commande,
+  slugifierNomAcheteur,
+  TirageIntrouvable,
+} from "./Commande";
 
-function commandeDemo(overrides: Partial<Parameters<typeof Commande.creer>[0]> = {}) {
-  return Commande.creer({
-    sessionId: "sess-1",
-    acheteurId: "ach-1",
-    photoNumero: 145,
-    format: Format._20x30,
-    quantite: 3,
-    montantUnitaire: new Montant(1200),
-    ...overrides,
-  });
+function commandeDemo(): Commande {
+  return Commande.creer({ sessionId: "sess-1", acheteurId: "ach-1" });
 }
 
-describe("Commande (agrégat racine)", () => {
-  it("se crée avec son contenu et calcule son total", () => {
+describe("Commande (agrégat racine avec tirages)", () => {
+  it("se crée vide", () => {
     const c = commandeDemo();
     expect(c.id).toBeTruthy();
-    expect(c.photoNumero).toBe(145);
-    expect(c.quantite).toBe(3);
-    expect(c.nombreTirages()).toBe(3);
-    expect(c.total().centimes).toBe(3600);
+    expect(c.tirages).toHaveLength(0);
+    expect(c.estVide()).toBe(true);
+    expect(c.total().centimes).toBe(0);
   });
 
-  it("refuse un sessionId vide", () => {
-    expect(() => commandeDemo({ sessionId: "  " })).toThrow(/sessionId/);
+  it("refuse sessionId vide", () => {
+    expect(() =>
+      Commande.creer({ sessionId: "  ", acheteurId: "a" }),
+    ).toThrow(/sessionId/);
   });
 
-  it("refuse un acheteurId vide", () => {
-    expect(() => commandeDemo({ acheteurId: "  " })).toThrow(/acheteurId/);
+  it("refuse acheteurId vide", () => {
+    expect(() =>
+      Commande.creer({ sessionId: "s", acheteurId: "  " }),
+    ).toThrow(/acheteurId/);
   });
 
-  it("refuse un photoNumero < 1", () => {
-    expect(() => commandeDemo({ photoNumero: 0 })).toThrow(/photoNumero/);
-  });
-
-  it("refuse une quantité < 1", () => {
-    expect(() => commandeDemo({ quantite: 0 })).toThrow(/quantite/);
-  });
-
-  it("capture le montantUnitaire en snapshot", () => {
-    const c = commandeDemo({ quantite: 2, montantUnitaire: new Montant(1500) });
-    expect(c.montantUnitaire.centimes).toBe(1500);
-    expect(c.total().centimes).toBe(3000);
-  });
-
-  it("nomsFichiersExport produit N cibles dans le sous-dossier du format", () => {
-    const c = commandeDemo();
-    const cibles = c.nomsFichiersExport("Martin Dupont");
-    expect(cibles).toEqual([
-      { sousDossier: "20x30", nomFichier: "martin_dupont_145_1.jpg" },
-      { sousDossier: "20x30", nomFichier: "martin_dupont_145_2.jpg" },
-      { sousDossier: "20x30", nomFichier: "martin_dupont_145_3.jpg" },
-    ]);
-  });
-
-  it("nomsFichiersExport traite Numerique comme les autres formats", () => {
-    const c = commandeDemo({
-      photoNumero: 7,
-      format: Format.NUMERIQUE,
-      quantite: 2,
-      montantUnitaire: new Montant(500),
+  describe("ajouterTirage", () => {
+    it("crée un tirage quand (photo, format) n'existe pas", () => {
+      const c = commandeDemo();
+      const t = c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 2,
+        montantUnitaire: new Montant(1200),
+      });
+      expect(c.tirages).toHaveLength(1);
+      expect(c.tirages[0].id).toBe(t.id);
     });
-    const cibles = c.nomsFichiersExport("Anne");
-    expect(cibles.every((x) => x.sousDossier === "Numerique")).toBe(true);
-    expect(cibles.map((x) => x.nomFichier)).toEqual([
-      "anne_7_1.jpg",
-      "anne_7_2.jpg",
-    ]);
+
+    it("CONSOLIDE (incrémente quantité) quand (photo, format) existe déjà", () => {
+      const c = commandeDemo();
+      const t1 = c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 1,
+        montantUnitaire: new Montant(1200),
+      });
+      const t2 = c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 2,
+        montantUnitaire: new Montant(9999), // ignoré, on garde le snapshot d'origine
+      });
+      expect(c.tirages).toHaveLength(1);
+      expect(t2.id).toBe(t1.id);
+      expect(c.tirages[0].quantite).toBe(3);
+      expect(c.tirages[0].montantUnitaire.centimes).toBe(1200);
+    });
+
+    it("distingue deux tirages avec même photo mais formats différents", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 1,
+        montantUnitaire: new Montant(1200),
+      });
+      c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._15x23,
+        quantite: 1,
+        montantUnitaire: new Montant(800),
+      });
+      expect(c.tirages).toHaveLength(2);
+    });
+  });
+
+  describe("retirerTirage", () => {
+    it("retire et retourne devenueVide=false s'il reste des tirages", () => {
+      const c = commandeDemo();
+      const t1 = c.ajouterTirage({
+        photoNumero: 1,
+        format: Format._20x30,
+        quantite: 1,
+        montantUnitaire: new Montant(1200),
+      });
+      c.ajouterTirage({
+        photoNumero: 2,
+        format: Format._20x30,
+        quantite: 1,
+        montantUnitaire: new Montant(1200),
+      });
+      const { devenueVide } = c.retirerTirage(t1.id);
+      expect(devenueVide).toBe(false);
+      expect(c.tirages).toHaveLength(1);
+    });
+
+    it("retourne devenueVide=true quand on retire le dernier tirage", () => {
+      const c = commandeDemo();
+      const t = c.ajouterTirage({
+        photoNumero: 1,
+        format: Format._20x30,
+        quantite: 1,
+        montantUnitaire: new Montant(1200),
+      });
+      const { devenueVide } = c.retirerTirage(t.id);
+      expect(devenueVide).toBe(true);
+      expect(c.estVide()).toBe(true);
+    });
+
+    it("lève TirageIntrouvable sur id inconnu", () => {
+      const c = commandeDemo();
+      expect(() => c.retirerTirage("inconnu")).toThrow(TirageIntrouvable);
+    });
+  });
+
+  describe("total / nombreTirages", () => {
+    it("cumule sur tous les tirages", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 1,
+        format: Format._20x30,
+        quantite: 2,
+        montantUnitaire: new Montant(1200),
+      });
+      c.ajouterTirage({
+        photoNumero: 2,
+        format: Format._15x23,
+        quantite: 3,
+        montantUnitaire: new Montant(800),
+      });
+      expect(c.nombreTirages()).toBe(5);
+      expect(c.total().centimes).toBe(2400 + 2400);
+    });
+  });
+
+  describe("nomsFichiersExport", () => {
+    it("produit une instruction par exemplaire, dans le sous-dossier du format", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 2,
+        montantUnitaire: new Montant(1200),
+      });
+      c.ajouterTirage({
+        photoNumero: 7,
+        format: Format.NUMERIQUE,
+        quantite: 1,
+        montantUnitaire: new Montant(500),
+      });
+      const instructions = c.nomsFichiersExport("Martin Dupont");
+      expect(instructions).toEqual([
+        {
+          sousDossier: "20x30",
+          nomFichier: "martin_dupont_145_1.jpg",
+          photoNumero: 145,
+        },
+        {
+          sousDossier: "20x30",
+          nomFichier: "martin_dupont_145_2.jpg",
+          photoNumero: 145,
+        },
+        {
+          sousDossier: "Numerique",
+          nomFichier: "martin_dupont_7_1.jpg",
+          photoNumero: 7,
+        },
+      ]);
+    });
   });
 });
 

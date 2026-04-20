@@ -17,7 +17,8 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 | **Commanditaire** | Champ texte sur Session | Lieu/compagnie/production qui a commandé le shoot. Pas d'entité réutilisable (YAGNI). |
 | **Référent** | Champ texte sur Session | Contact côté commanditaire. |
 | **Acheteur** | Entité fille de Session | Particulier/pro qui achète des tirages. Rattaché à une session, pas réutilisable cross-session. |
-| **Commande** | Agrégat racine | Un tirage : `sessionId` + `acheteurId` + `photoNumero` + `format` + `quantite` + `montantUnitaire` (snapshot). Plus de collection de lignes — une commande = un tirage, un acheteur qui veut N photos différentes a N commandes distinctes. |
+| **Commande** | Agrégat racine | **Une seule commande par couple `(sessionId, acheteurId)`**. Contient une collection de **Tirages**. Cycle de vie implicite : naît au premier tirage ajouté, disparaît quand le dernier est retiré. |
+| **Tirage** | Entité fille de Commande | `{ id, photoNumero, format, quantite, montantUnitaire snapshot }`. Le terme « ligne » est banni du domaine (réservé à l'UI pour parler d'une rangée). Invariant d'agrégat : unicité de `(photoNumero, format)` dans les tirages d'une commande — la consolidation (incrément de quantité) se fait si un doublon arrive. |
 | **Format** | VO | Catalogue fermé : `15x23`, `20x30`, `30x45`, `Numerique`. |
 | **Montant** | VO | Centimes d'euros (jamais de float pour de l'argent). |
 | **GrilleTarifaire** | VO dans Session | Mapping Format → Montant, ajustable par session via `Session.modifierPrix`. |
@@ -38,13 +39,18 @@ Le vocabulaire **métier** utilisé dans le code. À respecter partout : variabl
 └──────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────┐
-│ Commande (agrégat racine, sans enfants)                  │
+│ Commande (agrégat racine, unique par (session, acheteur))│
 │  ├── sessionId (référence par ID)                        │
 │  ├── acheteurId (référence par ID, acheteur de la session) │
-│  ├── photoNumero + format + quantite                     │
-│  └── montantUnitaire SNAPSHOT (figé à la création)       │
+│  └── Tirage[] (entités filles, identité = id)            │
+│       ├── photoNumero + format + quantite                │
+│       └── montantUnitaire SNAPSHOT (figé à la création)  │
 │                                                          │
-│  Une commande = un tirage. Pas de collection fille.      │
+│  Création et suppression implicites :                    │
+│   • naît quand on ajoute son premier tirage              │
+│   • disparaît quand on retire le dernier                 │
+│  Invariant d'agrégat : unicité de (photoNumero, format)  │
+│  dans les tirages (consolidation = incrément de qté).    │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -312,7 +318,47 @@ Le `TauriFileCopier` attrape les erreurs de plugin-fs et remonte des erreurs mé
 
 ---
 
-## Slice refacto — Commande sans lignes
+## Slice refacto — Commande unique par acheteur, avec Tirages
+
+**Décision métier** (2026-04-21) : chaque acheteur d'une session a **une seule commande** qui contient tous ses tirages. On rétablit la collection d'entités filles (sous le nom **Tirage** pour coller au métier, pas `LigneCommande`), mais on garde la granularité de manipulation tirage-par-tirage — l'UI gère « ajouter des photos » et « retirer cette photo » ; la commande elle-même n'est jamais créée ni supprimée explicitement par l'utilisateur.
+
+**Impact code** :
+- Nouvelle entité fille `Tirage` (`src/domain/entities/Tirage.ts`) avec `egaleContenu` et `avecQuantiteCumulee`
+- `Commande` regagne `_tirages: Tirage[]` + méthodes `ajouterTirage` (avec consolidation), `retirerTirage` (qui retourne `{ devenueVide }`), `total`, `nombreTirages`, `nomsFichiersExport` (parcourt les tirages)
+- Port `CommandeRepository.findByAcheteur(sessionId, acheteurId)` nouveau — seul moyen de garantir l'unicité
+- `AjouterTirageACommandeUseCase` remplace `PasserCommandeUseCase` : **upsert** via `findByAcheteur` + délégation de la consolidation à l'agrégat
+- `RetirerTirageDeCommandeUseCase` : retire le tirage, supprime la commande si elle devient vide
+- `erreurs-cross-aggregate.ts` factorise `AcheteurNAppartientPasASession` et `PhotoIntrouvableDansSession` (utilisées par plusieurs use cases)
+- `TauriCommandeRepository` : schéma JSON `{ id, sessionId, acheteurId, dateCreation, tirages[] }` ; tolérance aux JSON obsolètes
+- UI : `AjouterTiragesForm` remplace `NouvelleCommandeForm`. La carte acheteur affiche **une seule commande** (optionnelle) avec ses tirages en rangées. Plus de bouton « Nouvelle commande » — remplacé par « Ajouter des photos ». Bouton « Exporter la commande » en pied de carte. Bouton « Retirer » par tirage, toast adapté selon que la commande est supprimée ou non.
+
+### Patterns DDD introduits
+
+#### Upsert cross-aggregate avec contrainte d'unicité
+
+La règle « une seule Commande par `(sessionId, acheteurId)` » vit **dans le use case `AjouterTirageACommande`**, pas dans le constructeur de `Commande` (qui n'a pas le regard global nécessaire). Le use case interroge `CommandeRepository.findByAcheteur(...)` avant de décider : réutiliser l'existante ou créer une nouvelle. C'est le pattern **upsert cross-aggregate** — une seule entrée, le regard global arbitre.
+
+Même pattern que l'unicité du nom d'acheteur en slice 2 : dès qu'un invariant nécessite un regard qui dépasse l'agrégat, il remonte au use case.
+
+#### Consolidation comme invariant d'agrégat
+
+Dans la même Commande, deux tirages de même `(photoNumero, format)` sont **interdits**. Cette règle tient à l'intérieur de l'agrégat (tous les tirages sont visibles depuis `Commande._tirages`), donc elle vit dans `Commande.ajouterTirage` qui **consolide** (incrémente la quantité) si le couple existe déjà.
+
+Note importante : la consolidation **ne recalcule pas** le prix unitaire — on conserve le `montantUnitaire` du snapshot d'origine. Si la grille a changé entre le premier ajout et la consolidation, le prix de l'addition reste celui du premier tirage. Cohérent avec le pattern snapshot général.
+
+#### Création et suppression implicites d'une racine
+
+`Commande` n'a **pas** de use case « CréerCommande » ni de bouton UI dédié. Elle naît quand on lui ajoute son premier tirage (via `AjouterTirageACommande` qui fait un `Commande.creer(...)` interne si `findByAcheteur` ne trouve rien) et disparaît quand on retire son dernier tirage (via `RetirerTirageDeCommande` qui appelle `delete` si `devenueVide`).
+
+Ce pattern fonctionne **en couple** : le cycle de vie implicite n'est cohérent que si les deux extrémités sont symétriques. Une création implicite sans suppression implicite laisserait des racines fantômes vides.
+
+#### Tolérance à l'évolution du schéma de persistance
+
+`TauriCommandeRepository` type-guarde chaque entrée JSON au chargement. Les commandes au schéma d'hier (une commande = un tirage, champs plats) ne passent pas le guard et sont **ignorées avec un warning console**. Zéro crash, migration silencieuse. Compromis pragmatique pour une app locale en dev ; une migration formelle viendra si on déploie.
+
+---
+
+## Slice refacto — Commande sans lignes (précédente, historisée)
 
 **Décision métier** : le copain n'a pas besoin de regrouper plusieurs tirages dans une seule « commande ». Chaque tirage (photo × format × quantité) est une commande à part entière. Un acheteur qui veut 3 photos en 2 formats = 6 commandes.
 

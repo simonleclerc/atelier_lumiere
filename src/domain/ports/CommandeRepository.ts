@@ -21,6 +21,15 @@ export interface CommandeRepository {
   findById(id: string): Promise<Commande>;
   findBySessionId(sessionId: string): Promise<readonly Commande[]>;
   /**
+   * Récupère la commande du couple (session, acheteur) si elle existe.
+   * Sert à l'upsert : une seule Commande peut exister par acheteur d'une
+   * session, cette méthode est le seul point de vérification.
+   */
+  findByAcheteur(
+    sessionId: string,
+    acheteurId: string,
+  ): Promise<Commande | null>;
+  /**
    * Supprime la commande ; ne lève pas si l'id n'existe pas (idempotent).
    */
   delete(id: string): Promise<void>;

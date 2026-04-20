@@ -7,6 +7,7 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { Commande } from "@/domain/entities/Commande";
+import { Tirage } from "@/domain/entities/Tirage";
 import {
   CommandeIntrouvable,
   type CommandeRepository,
@@ -17,23 +18,28 @@ import { Montant } from "@/domain/value-objects/Montant";
 /**
  * Adapter Tauri — persistance JSON dans `AppData/commandes.json`.
  *
- * Schéma : une commande par ligne (plus de tableau `lignes[]` depuis la
- * simplification du modèle). Tolérant aux anciens JSON qui contenaient
- * des lignes — les entrées au schéma obsolète sont silencieusement
- * ignorées avec un warning console. Migration automatique acceptable
- * pour une app locale mono-utilisateur en dev.
+ * Schéma : une commande a ses tirages embarqués sous la clé `tirages`
+ * (aligne avec l'ubiquitous language métier — pas `lignes`). Tolérant
+ * aux entrées obsolètes : celles qui ne matchent pas le schéma sont
+ * ignorées avec un warning console, permettant une migration silencieuse
+ * depuis la version d'hier (schéma plat une commande = un tirage).
  */
 const FICHIER = "commandes.json";
+
+interface TirageJson {
+  readonly id: string;
+  readonly photoNumero: number;
+  readonly format: string;
+  readonly quantite: number;
+  readonly centimesUnitaire: number;
+}
 
 interface CommandeJson {
   readonly id: string;
   readonly sessionId: string;
   readonly acheteurId: string;
   readonly dateCreation: string;
-  readonly photoNumero: number;
-  readonly format: string;
-  readonly quantite: number;
-  readonly centimesUnitaire: number;
+  readonly tirages: readonly TirageJson[];
 }
 
 export class TauriCommandeRepository implements CommandeRepository {
@@ -57,6 +63,17 @@ export class TauriCommandeRepository implements CommandeRepository {
   async findBySessionId(sessionId: string): Promise<readonly Commande[]> {
     const raws = await this.loadRaw();
     return raws.filter((r) => r.sessionId === sessionId).map(fromJson);
+  }
+
+  async findByAcheteur(
+    sessionId: string,
+    acheteurId: string,
+  ): Promise<Commande | null> {
+    const raws = await this.loadRaw();
+    const trouvee = raws.find(
+      (r) => r.sessionId === sessionId && r.acheteurId === acheteurId,
+    );
+    return trouvee ? fromJson(trouvee) : null;
   }
 
   async delete(id: string): Promise<void> {
@@ -106,11 +123,23 @@ export class TauriCommandeRepository implements CommandeRepository {
 function estCommandeJson(item: unknown): item is CommandeJson {
   if (!item || typeof item !== "object") return false;
   const o = item as Record<string, unknown>;
+  if (
+    typeof o.id !== "string" ||
+    typeof o.sessionId !== "string" ||
+    typeof o.acheteurId !== "string" ||
+    typeof o.dateCreation !== "string" ||
+    !Array.isArray(o.tirages)
+  ) {
+    return false;
+  }
+  return o.tirages.every(estTirageJson);
+}
+
+function estTirageJson(item: unknown): item is TirageJson {
+  if (!item || typeof item !== "object") return false;
+  const o = item as Record<string, unknown>;
   return (
     typeof o.id === "string" &&
-    typeof o.sessionId === "string" &&
-    typeof o.acheteurId === "string" &&
-    typeof o.dateCreation === "string" &&
     typeof o.photoNumero === "number" &&
     typeof o.format === "string" &&
     typeof o.quantite === "number" &&
@@ -124,10 +153,13 @@ function toJson(commande: Commande): CommandeJson {
     sessionId: commande.sessionId,
     acheteurId: commande.acheteurId,
     dateCreation: commande.dateCreation.toISOString(),
-    photoNumero: commande.photoNumero,
-    format: commande.format.toDossierName(),
-    quantite: commande.quantite,
-    centimesUnitaire: commande.montantUnitaire.centimes,
+    tirages: commande.tirages.map((t) => ({
+      id: t.id,
+      photoNumero: t.photoNumero,
+      format: t.format.toDossierName(),
+      quantite: t.quantite,
+      centimesUnitaire: t.montantUnitaire.centimes,
+    })),
   };
 }
 
@@ -137,9 +169,15 @@ function fromJson(raw: CommandeJson): Commande {
     sessionId: raw.sessionId,
     acheteurId: raw.acheteurId,
     dateCreation: new Date(raw.dateCreation),
-    photoNumero: raw.photoNumero,
-    format: Format.depuis(raw.format),
-    quantite: raw.quantite,
-    montantUnitaire: new Montant(raw.centimesUnitaire),
+    tirages: raw.tirages.map(
+      (t) =>
+        new Tirage({
+          id: t.id,
+          photoNumero: t.photoNumero,
+          format: Format.depuis(t.format),
+          quantite: t.quantite,
+          montantUnitaire: new Montant(t.centimesUnitaire),
+        }),
+    ),
   });
 }

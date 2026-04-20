@@ -1,7 +1,7 @@
 import type { CommandeRepository } from "../ports/CommandeRepository";
 import type { FileCopier } from "../ports/FileCopier";
 import type { SessionRepository } from "../ports/SessionRepository";
-import { AcheteurNAppartientPasASession } from "./PasserCommande";
+import { AcheteurNAppartientPasASession } from "./erreurs-cross-aggregate";
 
 /**
  * Use case — exporte physiquement les fichiers d'une commande.
@@ -49,11 +49,11 @@ export class ExporterCommandeUseCase {
     }
 
     const cibles = commande.nomsFichiersExport(acheteur.nom);
-    const cheminSource = joinChemin(
-      session.dossierSource.valeur,
-      `${commande.photoNumero}.jpg`,
-    );
     for (const cible of cibles) {
+      const cheminSource = joinChemin(
+        session.dossierSource.valeur,
+        `${cible.photoNumero}.jpg`,
+      );
       const cheminDestination = joinChemin(
         session.dossierExport.valeur,
         cible.sousDossier,

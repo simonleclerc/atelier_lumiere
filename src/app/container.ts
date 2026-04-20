@@ -1,4 +1,5 @@
 import { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
+import { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
@@ -6,7 +7,7 @@ import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
 import { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
-import { PasserCommandeUseCase } from "@/domain/usecases/PasserCommande";
+import { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import { SupprimerCommandeUseCase } from "@/domain/usecases/SupprimerCommande";
 import { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMemory/InMemoryGrilleTarifaireParDefautProvider";
@@ -18,8 +19,7 @@ import { TauriSessionRepository } from "@/infrastructure/tauri/TauriSessionRepos
 
 /**
  * Composition root — le SEUL endroit du projet qui câble les adapters concrets
- * aux use cases. Pour porter l'app sur une autre plateforme (web, mobile,
- * serveur), c'est ici, et ici seulement, qu'on échange les adapters.
+ * aux use cases.
  */
 const sessionRepository = new TauriSessionRepository();
 const commandeRepository = new TauriCommandeRepository();
@@ -43,8 +43,11 @@ export const container = {
   modifierInfosSession: new ModifierInfosSessionUseCase(sessionRepository),
   modifierPrixSession: new ModifierPrixSessionUseCase(sessionRepository),
 
-  passerCommande: new PasserCommandeUseCase(
+  ajouterTirageACommande: new AjouterTirageACommandeUseCase(
     sessionRepository,
+    commandeRepository,
+  ),
+  retirerTirageDeCommande: new RetirerTirageDeCommandeUseCase(
     commandeRepository,
   ),
   listerCommandesDeSession: new ListerCommandesDeSessionUseCase(

@@ -1,37 +1,39 @@
-import { Format } from "../value-objects/Format";
+import type { Format } from "../value-objects/Format";
 import { Montant } from "../value-objects/Montant";
+import { Tirage } from "./Tirage";
 
 /**
- * Agrégat racine séparé de Session.
+ * Agrégat racine — la commande d'UN acheteur dans UNE session.
  *
- * Modèle simplifié : une Commande = le contenu d'UN tirage (ou d'un lot
- * de tirages identiques). Un acheteur qui veut 3 photos différentes
- * = 3 Commandes distinctes. Simple, granulaire, zéro collection fille.
+ * Contrainte métier cruciale : il y a au plus UNE commande par couple
+ * `(sessionId, acheteurId)`. C'est une règle **cross-aggregate** (Commande
+ * et Session sont deux agrégats distincts), garantie par le use case
+ * `AjouterTirageACommande` qui fait un upsert via
+ * `CommandeRepository.findByAcheteur`.
  *
- * Références INTER-AGRÉGATS par ID uniquement (sessionId, acheteurId) —
- * jamais d'objet Session ni Acheteur embarqué. Règle Vernon « Reference
- * Other Aggregates By Identity ».
+ * Contenu : une collection de **Tirages** (terme métier du photographe,
+ * pas "lignes"). Invariant d'agrégat : unicité de `(photoNumero, format)`
+ * dans les tirages — à l'ajout, si le couple existe déjà, on consolide
+ * en incrémentant la quantité plutôt que de créer un doublon.
  *
- * Invariants protégés ICI :
- *  - sessionId et acheteurId non vides (l'existence même de ces objets est
- *    un invariant INTER-agrégats vérifié par le use case, pas ici)
- *  - photoNumero entier ≥ 1
- *  - quantite entière ≥ 1
- *
- * Pattern SNAPSHOT : `montantUnitaire` est FIGÉ à la création, capturé
- * depuis la grille tarifaire de la session au moment où la commande est
- * créée. Conséquence : si le copain ajuste un prix plus tard, les
- * commandes déjà passées gardent leurs prix d'origine.
+ * Cycle de vie implicite : la Commande naît quand on lui ajoute son
+ * premier tirage, et doit être supprimée quand on retire son dernier
+ * (pour éviter les commandes fantômes vides). `retirerTirage` signale
+ * au use case appelant via son booléen de retour.
  */
+export class TirageIntrouvable extends Error {
+  constructor(tirageId: string) {
+    super(`Tirage introuvable pour l'id "${tirageId}".`);
+    this.name = "TirageIntrouvable";
+  }
+}
+
 export interface CommandeDonnees {
   readonly id: string;
   readonly sessionId: string;
   readonly acheteurId: string;
   readonly dateCreation: Date;
-  readonly photoNumero: number;
-  readonly format: Format;
-  readonly quantite: number;
-  readonly montantUnitaire: Montant;
+  readonly tirages?: readonly Tirage[];
 }
 
 export class Commande {
@@ -39,10 +41,8 @@ export class Commande {
   readonly sessionId: string;
   readonly acheteurId: string;
   readonly dateCreation: Date;
-  readonly photoNumero: number;
-  readonly format: Format;
-  readonly quantite: number;
-  readonly montantUnitaire: Montant;
+
+  private _tirages: Tirage[];
 
   constructor(donnees: CommandeDonnees) {
     if (!donnees.id.trim()) {
@@ -57,34 +57,17 @@ export class Commande {
     if (Number.isNaN(donnees.dateCreation.getTime())) {
       throw new Error("Commande: dateCreation invalide.");
     }
-    if (!Number.isInteger(donnees.photoNumero) || donnees.photoNumero < 1) {
-      throw new Error(
-        `Commande: photoNumero entier ≥ 1 attendu (reçu ${donnees.photoNumero}).`,
-      );
-    }
-    if (!Number.isInteger(donnees.quantite) || donnees.quantite < 1) {
-      throw new Error(
-        `Commande: quantite entière ≥ 1 attendue (reçu ${donnees.quantite}).`,
-      );
-    }
 
     this.id = donnees.id;
     this.sessionId = donnees.sessionId;
     this.acheteurId = donnees.acheteurId;
     this.dateCreation = donnees.dateCreation;
-    this.photoNumero = donnees.photoNumero;
-    this.format = donnees.format;
-    this.quantite = donnees.quantite;
-    this.montantUnitaire = donnees.montantUnitaire;
+    this._tirages = [...(donnees.tirages ?? [])];
   }
 
   static creer(params: {
     sessionId: string;
     acheteurId: string;
-    photoNumero: number;
-    format: Format;
-    quantite: number;
-    montantUnitaire: Montant;
     id?: string;
     dateCreation?: Date;
   }): Commande {
@@ -93,42 +76,112 @@ export class Commande {
       sessionId: params.sessionId,
       acheteurId: params.acheteurId,
       dateCreation: params.dateCreation ?? new Date(),
+      tirages: [],
+    });
+  }
+
+  get tirages(): readonly Tirage[] {
+    return this._tirages;
+  }
+
+  /**
+   * Ajoute un tirage à la commande, avec CONSOLIDATION : si un tirage
+   * existant a le même `(photoNumero, format)`, sa quantité est
+   * incrémentée. Sinon on crée un nouveau Tirage.
+   *
+   * Le `montantUnitaire` passé est utilisé uniquement si on crée un
+   * nouveau Tirage — la consolidation ne re-calcule pas le prix, on
+   * conserve celui du snapshot d'origine. Règle métier : si la grille a
+   * changé entre l'ajout initial et la consolidation, le prix unitaire
+   * de la consolidation reste celui du premier ajout.
+   */
+  ajouterTirage(params: {
+    photoNumero: number;
+    format: Format;
+    quantite: number;
+    montantUnitaire: Montant;
+  }): Tirage {
+    const indexExistant = this._tirages.findIndex((t) =>
+      t.egaleContenu(params.photoNumero, params.format),
+    );
+    if (indexExistant !== -1) {
+      const consolide = this._tirages[indexExistant].avecQuantiteCumulee(
+        params.quantite,
+      );
+      this._tirages[indexExistant] = consolide;
+      return consolide;
+    }
+    const nouveau = Tirage.creer({
       photoNumero: params.photoNumero,
       format: params.format,
       quantite: params.quantite,
       montantUnitaire: params.montantUnitaire,
     });
-  }
-
-  total(): Montant {
-    return this.montantUnitaire.multiplierPar(this.quantite);
-  }
-
-  nombreTirages(): number {
-    return this.quantite;
+    this._tirages.push(nouveau);
+    return nouveau;
   }
 
   /**
-   * Produit la liste des fichiers à créer à l'export pour cette commande.
-   * Chaque entrée = un sous-dossier (nommé par le format) + un nom de
-   * fichier slugifié `{acheteur}_{photo}_{i}.jpg`.
+   * Retire un tirage par son id.
    *
-   * Le format `Numerique` partage la même logique que les formats
-   * d'impression — si quantité = 3, on crée 3 copies dans `Numerique/`.
+   * Retourne `{ devenueVide: true }` si la commande n'a plus aucun tirage
+   * après le retrait, pour signaler au use case appelant qu'il peut
+   * supprimer la Commande elle-même (création et suppression implicites
+   * forment un couple cohérent).
+   */
+  retirerTirage(tirageId: string): { devenueVide: boolean } {
+    const index = this._tirages.findIndex((t) => t.id === tirageId);
+    if (index === -1) throw new TirageIntrouvable(tirageId);
+    this._tirages.splice(index, 1);
+    return { devenueVide: this._tirages.length === 0 };
+  }
+
+  estVide(): boolean {
+    return this._tirages.length === 0;
+  }
+
+  total(): Montant {
+    return this._tirages.reduce(
+      (somme, t) => somme.ajouter(t.total()),
+      new Montant(0),
+    );
+  }
+
+  nombreTirages(): number {
+    return this._tirages.reduce((n, t) => n + t.quantite, 0);
+  }
+
+  /**
+   * Produit les instructions d'export pour tous les tirages de la
+   * commande, à plat. Pour chaque tirage, une entrée par exemplaire
+   * (selon la quantité), nommée `{acheteur}_{photo}_{i}.jpg` dans le
+   * sous-dossier correspondant au format.
    *
-   * Méthode PURE qui ne fait pas l'I/O : c'est le use case ExporterCommande
-   * qui orchestre les copies à partir de ces instructions.
+   * Méthode PURE — le use case ExporterCommande orchestre les copies
+   * réelles à partir de ces instructions.
    */
   nomsFichiersExport(nomAcheteur: string): ReadonlyArray<{
     readonly sousDossier: string;
     readonly nomFichier: string;
+    readonly photoNumero: number;
   }> {
     const slug = slugifierNomAcheteur(nomAcheteur);
-    const sousDossier = this.format.toDossierName();
-    return Array.from({ length: this.quantite }, (_, i) => ({
-      sousDossier,
-      nomFichier: `${slug}_${this.photoNumero}_${i + 1}.jpg`,
-    }));
+    const instructions: Array<{
+      sousDossier: string;
+      nomFichier: string;
+      photoNumero: number;
+    }> = [];
+    for (const tirage of this._tirages) {
+      const sousDossier = tirage.format.toDossierName();
+      for (let i = 0; i < tirage.quantite; i += 1) {
+        instructions.push({
+          sousDossier,
+          nomFichier: `${slug}_${tirage.photoNumero}_${i + 1}.jpg`,
+          photoNumero: tirage.photoNumero,
+        });
+      }
+    }
+    return instructions;
   }
 }
 
