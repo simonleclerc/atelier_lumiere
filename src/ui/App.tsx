@@ -16,6 +16,7 @@ import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande
 import type { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
 import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import type { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
+import type { RescannerDossierSourceUseCase } from "@/domain/usecases/RescannerDossierSource";
 import type { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 import type { SauvegardeFichierPicker } from "@/ui/ports/SauvegardeFichierPicker";
@@ -35,6 +36,7 @@ interface AppProps {
   exporterCommande: ExporterCommandeUseCase;
   exporterSession: ExporterSessionUseCase;
   controlerCoherenceSession: ControlerCoherenceSessionUseCase;
+  rescannerDossierSource: RescannerDossierSourceUseCase;
   supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
   exporterSauvegarde: ExporterSauvegardeUseCase;
   importerSauvegarde: ImporterSauvegardeUseCase;
@@ -58,6 +60,7 @@ function App({
   exporterCommande,
   exporterSession,
   controlerCoherenceSession,
+  rescannerDossierSource,
   supprimerOrphelinsExport,
   exporterSauvegarde,
   importerSauvegarde,
@@ -95,6 +98,7 @@ function App({
             exporterCommande={exporterCommande}
             exporterSession={exporterSession}
             controlerCoherenceSession={controlerCoherenceSession}
+            rescannerDossierSource={rescannerDossierSource}
             supprimerOrphelinsExport={supprimerOrphelinsExport}
             dossierPicker={dossierPicker}
             onRetour={() => setVue({ nom: "liste" })}

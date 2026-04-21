@@ -18,7 +18,7 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 - [x] Voir si l'export est à jour pour une commande <!-- badge statut (pas-exporté/incomplet/erreur/complet) sur chaque acheteur, message d'erreur visible sous le nom ; pas de diff fichier-par-fichier — on se base sur l'état capturé au dernier export et sur les modifications depuis -->
 - [x] Voir si l'export est à jour pour toutes les commandes d'une session <!-- badge agrégé dans le récapitulatif de la session, priorité erreur > mixte > complet/pas-exporté -->
 
-- [ ] Rescanner le dossier source (si les photos dedans ont changé)
+- [x] Rescanner le dossier source <!-- bouton "Rescanner les photos" sur la page session ; use case RescannerDossierSource + Session.remplacerPhotos, retourne le diff (ajoutées/retirées) affiché en toast -->
 - [x] Contrôler la cohérence d'une session <!-- bouton qui croise commandes × dossier source × dossier export ; 3 catégories : photos fantômes (tirage qui pointe vers un fichier source absent → retirer les tirages), exports à refaire (fichier attendu manquant dans le dossier export → ré-exporter la commande), orphelins dans l'export (fichiers {slug}_N_i.jpg plus rattachés à aucun tirage courant → suppression opt-in avec checkboxes). Le dossier SOURCE n'est JAMAIS modifié. Use cases ControlerCoherenceSession + SupprimerOrphelinsExport -->
 
 ## Saisie de commande

@@ -11,6 +11,7 @@ import { ListerSessionsUseCase } from "@/domain/usecases/ListerSessions";
 import { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
 import { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
+import { RescannerDossierSourceUseCase } from "@/domain/usecases/RescannerDossierSource";
 import { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import { SupprimerCommandeUseCase } from "@/domain/usecases/SupprimerCommande";
 import { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
@@ -92,6 +93,10 @@ export const container = {
     sessionRepository,
     commandeRepository,
     fileLister,
+  ),
+  rescannerDossierSource: new RescannerDossierSourceUseCase(
+    sessionRepository,
+    fileSystemScanner,
   ),
   supprimerOrphelinsExport: new SupprimerOrphelinsExportUseCase(
     sessionRepository,

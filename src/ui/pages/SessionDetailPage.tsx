@@ -31,6 +31,7 @@ import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCo
 import type { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur";
 import type { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
+import type { RescannerDossierSourceUseCase } from "@/domain/usecases/RescannerDossierSource";
 import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import type { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
@@ -49,6 +50,7 @@ interface Props {
   exporterCommande: ExporterCommandeUseCase;
   exporterSession: ExporterSessionUseCase;
   controlerCoherenceSession: ControlerCoherenceSessionUseCase;
+  rescannerDossierSource: RescannerDossierSourceUseCase;
   supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
   dossierPicker: DossierPicker;
   onRetour: () => void;
@@ -76,6 +78,7 @@ export function SessionDetailPage({
   exporterCommande,
   exporterSession,
   controlerCoherenceSession,
+  rescannerDossierSource,
   supprimerOrphelinsExport,
   dossierPicker,
   onRetour,
@@ -101,6 +104,7 @@ export function SessionDetailPage({
   const [cheminsASupprimer, setCheminsASupprimer] = useState<Set<string>>(
     new Set(),
   );
+  const [rescanEnCours, setRescanEnCours] = useState(false);
 
   const recharger = useCallback(async () => {
     setChargement(true);
@@ -213,6 +217,36 @@ export function SessionDetailPage({
         />
       </section>
     );
+  }
+
+  async function rescanner(): Promise<void> {
+    setRescanEnCours(true);
+    try {
+      const r = await rescannerDossierSource.execute({ sessionId });
+      if (r.ajoutes.length === 0 && r.retires.length === 0) {
+        toast.success("Dossier source inchangé");
+      } else {
+        const morceaux: string[] = [];
+        if (r.ajoutes.length > 0) {
+          morceaux.push(
+            `${r.ajoutes.length} ajoutée${r.ajoutes.length > 1 ? "s" : ""}`,
+          );
+        }
+        if (r.retires.length > 0) {
+          morceaux.push(
+            `${r.retires.length} retirée${r.retires.length > 1 ? "s" : ""}`,
+          );
+        }
+        toast.success(`Photos mises à jour : ${morceaux.join(", ")}`);
+      }
+      await recharger();
+    } catch (err) {
+      toast.error("Rescan impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRescanEnCours(false);
+    }
   }
 
   async function chargerRapportCoherence(): Promise<void> {
@@ -331,6 +365,13 @@ export function SessionDetailPage({
             <span className="text-sm text-muted-foreground">
               {session.type} · {session.date.toLocaleDateString("fr-FR")}
             </span>
+            <Button
+              variant="outline"
+              onClick={rescanner}
+              disabled={rescanEnCours}
+            >
+              {rescanEnCours ? "Rescan…" : "Rescanner les photos"}
+            </Button>
             <Button
               variant="outline"
               onClick={ouvrirControleCoherence}

@@ -195,4 +195,29 @@ describe("Session (agrégat racine)", () => {
       expect(modifie.email?.valeur).toBe("new@x.com");
     });
   });
+
+  describe("remplacerPhotos", () => {
+    it("remplace la liste et retourne le diff", () => {
+      const s = Session.creer({ ...entreeValide, photoNumeros: [1, 2, 3] });
+      const diff = s.remplacerPhotos([2, 3, 4, 5]);
+      expect(s.photos.map((p) => p.numero)).toEqual([2, 3, 4, 5]);
+      expect(diff.ajoutes).toEqual([4, 5]);
+      expect(diff.retires).toEqual([1]);
+    });
+
+    it("retourne des diffs vides si le contenu est identique", () => {
+      const s = Session.creer({ ...entreeValide, photoNumeros: [1, 2, 3] });
+      const diff = s.remplacerPhotos([3, 1, 2]);
+      expect(diff.ajoutes).toEqual([]);
+      expect(diff.retires).toEqual([]);
+    });
+
+    it("ignore les numéros invalides sans crash", () => {
+      const s = Session.creer({ ...entreeValide, photoNumeros: [1] });
+      const diff = s.remplacerPhotos([1, 2, 0, -3, 2]);
+      expect(s.photos.map((p) => p.numero)).toEqual([1, 2]);
+      expect(diff.ajoutes).toEqual([2]);
+      expect(diff.retires).toEqual([]);
+    });
+  });
 });

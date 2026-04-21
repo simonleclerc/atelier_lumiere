@@ -109,16 +109,16 @@ export class Session {
   type: TypeSession;
   dossierSource: CheminDossier;
   dossierExport: CheminDossier;
-  readonly photos: readonly Photo[];
 
   /**
    * Stockage mutable privé : l'agrégat racine a le droit d'évoluer son
    * état interne au fil du temps (ajout d'acheteurs, ajustement de la
-   * grille tarifaire), mais l'extérieur ne voit qu'une vue en lecture
-   * seule via les getters.
+   * grille tarifaire, rescan des photos du dossier source), mais
+   * l'extérieur ne voit qu'une vue en lecture seule via les getters.
    */
   private _grilleTarifaire: GrilleTarifaire;
   private readonly _acheteurs: Acheteur[];
+  private _photos: Photo[];
 
   constructor(donnees: SessionDonnees) {
     if (!donnees.id.trim()) {
@@ -143,8 +143,39 @@ export class Session {
     this.dossierSource = infos.dossierSource;
     this.dossierExport = infos.dossierExport;
     this._grilleTarifaire = donnees.grilleTarifaire;
-    this.photos = [...donnees.photos].sort((a, b) => a.numero - b.numero);
+    this._photos = [...donnees.photos].sort((a, b) => a.numero - b.numero);
     this._acheteurs = [...acheteurs];
+  }
+
+  get photos(): readonly Photo[] {
+    return this._photos;
+  }
+
+  /**
+   * Remplace la liste des photos (après un rescan du dossier source).
+   * Retourne le diff pour que l'appelant puisse rapporter ce qui a
+   * changé : `ajoutes` = nouveaux numéros apparus sur disque, `retires`
+   * = numéros qui n'y sont plus. L'ordre interne est renormalisé.
+   */
+  remplacerPhotos(numeros: readonly number[]): {
+    ajoutes: number[];
+    retires: number[];
+  } {
+    const anciens = new Set(this._photos.map((p) => p.numero));
+    const nouveaux = new Set<number>();
+    for (const n of numeros) {
+      if (Number.isInteger(n) && n >= 1) nouveaux.add(n);
+    }
+    const ajoutes = [...nouveaux].filter((n) => !anciens.has(n)).sort(
+      (a, b) => a - b,
+    );
+    const retires = [...anciens].filter((n) => !nouveaux.has(n)).sort(
+      (a, b) => a - b,
+    );
+    this._photos = [...nouveaux]
+      .sort((a, b) => a - b)
+      .map((n) => new Photo(n));
+    return { ajoutes, retires };
   }
 
   static creer(params: {
