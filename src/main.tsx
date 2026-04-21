@@ -19,6 +19,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       retirerTirageDeCommande={container.retirerTirageDeCommande}
       exporterCommande={container.exporterCommande}
       exporterSession={container.exporterSession}
+      controlerCoherenceSession={container.controlerCoherenceSession}
+      supprimerOrphelinsExport={container.supprimerOrphelinsExport}
       exporterSauvegarde={container.exporterSauvegarde}
       importerSauvegarde={container.importerSauvegarde}
       dossierPicker={container.dossierPicker}

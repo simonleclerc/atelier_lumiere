@@ -21,6 +21,10 @@ import { Montant } from "@/domain/value-objects/Montant";
 import { StatutExport } from "@/domain/value-objects/StatutExport";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
+import type {
+  ControlerCoherenceSessionResultat,
+  ControlerCoherenceSessionUseCase,
+} from "@/domain/usecases/ControlerCoherenceSession";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
@@ -28,6 +32,7 @@ import type { ModifierAcheteurUseCase } from "@/domain/usecases/ModifierAcheteur
 import type { ModifierInfosSessionUseCase } from "@/domain/usecases/ModifierInfosSession";
 import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixSession";
 import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
+import type { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 
@@ -43,6 +48,8 @@ interface Props {
   retirerTirage: RetirerTirageDeCommandeUseCase;
   exporterCommande: ExporterCommandeUseCase;
   exporterSession: ExporterSessionUseCase;
+  controlerCoherenceSession: ControlerCoherenceSessionUseCase;
+  supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
   dossierPicker: DossierPicker;
   onRetour: () => void;
 }
@@ -68,6 +75,8 @@ export function SessionDetailPage({
   retirerTirage,
   exporterCommande,
   exporterSession,
+  controlerCoherenceSession,
+  supprimerOrphelinsExport,
   dossierPicker,
   onRetour,
 }: Props) {
@@ -84,6 +93,14 @@ export function SessionDetailPage({
     nouveauNom: string;
     resoudre: (ok: boolean) => void;
   } | null>(null);
+  const [coherenceOuverte, setCoherenceOuverte] = useState(false);
+  const [rapportCoherence, setRapportCoherence] =
+    useState<ControlerCoherenceSessionResultat | null>(null);
+  const [chargementCoherence, setChargementCoherence] = useState(false);
+  const [actionCoherenceEnCours, setActionCoherenceEnCours] = useState(false);
+  const [cheminsASupprimer, setCheminsASupprimer] = useState<Set<string>>(
+    new Set(),
+  );
 
   const recharger = useCallback(async () => {
     setChargement(true);
@@ -198,6 +215,110 @@ export function SessionDetailPage({
     );
   }
 
+  async function chargerRapportCoherence(): Promise<void> {
+    setChargementCoherence(true);
+    try {
+      const r = await controlerCoherenceSession.execute({ sessionId });
+      setRapportCoherence(r);
+      setCheminsASupprimer(
+        new Set(r.orphelinsExport.map((o) => o.cheminAbsolu)),
+      );
+    } catch (err) {
+      toast.error("Contrôle de cohérence impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setChargementCoherence(false);
+    }
+  }
+
+  async function ouvrirControleCoherence(): Promise<void> {
+    setCoherenceOuverte(true);
+    await chargerRapportCoherence();
+  }
+
+  async function retirerTiragesFantomes(): Promise<void> {
+    if (!rapportCoherence) return;
+    setActionCoherenceEnCours(true);
+    let retires = 0;
+    let erreurs = 0;
+    for (const f of rapportCoherence.photosFantomes) {
+      for (const tid of f.tirageIds) {
+        try {
+          await retirerTirage.execute({
+            commandeId: f.commandeId,
+            tirageId: tid,
+          });
+          retires += 1;
+        } catch {
+          erreurs += 1;
+        }
+      }
+    }
+    if (erreurs === 0) {
+      toast.success(`${retires} tirage${retires > 1 ? "s" : ""} fantôme${retires > 1 ? "s" : ""} retiré${retires > 1 ? "s" : ""}`);
+    } else {
+      toast.warning(
+        `${retires} retiré${retires > 1 ? "s" : ""}, ${erreurs} échec${erreurs > 1 ? "s" : ""}`,
+      );
+    }
+    await recharger();
+    await chargerRapportCoherence();
+    setActionCoherenceEnCours(false);
+  }
+
+  async function reexporterCommandesIncompletes(): Promise<void> {
+    if (!rapportCoherence) return;
+    setActionCoherenceEnCours(true);
+    let ok = 0;
+    let echec = 0;
+    for (const e of rapportCoherence.exportsIncomplets) {
+      try {
+        await exporterCommande.execute({ commandeId: e.commandeId });
+        ok += 1;
+      } catch {
+        echec += 1;
+      }
+    }
+    if (echec === 0) {
+      toast.success(`${ok} commande${ok > 1 ? "s" : ""} ré-exportée${ok > 1 ? "s" : ""}`);
+    } else {
+      toast.warning(
+        `${ok} ré-exportée${ok > 1 ? "s" : ""}, ${echec} échec${echec > 1 ? "s" : ""}`,
+      );
+    }
+    await recharger();
+    await chargerRapportCoherence();
+    setActionCoherenceEnCours(false);
+  }
+
+  async function supprimerOrphelinsSelectionnes(): Promise<void> {
+    const chemins = [...cheminsASupprimer];
+    if (chemins.length === 0) return;
+    setActionCoherenceEnCours(true);
+    try {
+      const r = await supprimerOrphelinsExport.execute({
+        sessionId,
+        cheminsAbsolus: chemins,
+      });
+      const suffixe =
+        r.ignoresCarAttendus > 0
+          ? ` · ${r.ignoresCarAttendus} ignoré${r.ignoresCarAttendus > 1 ? "s" : ""} (redevenu${r.ignoresCarAttendus > 1 ? "s" : ""} attendu${r.ignoresCarAttendus > 1 ? "s" : ""})`
+          : "";
+      toast.success(
+        `${r.fichiersSupprimes} fichier${r.fichiersSupprimes > 1 ? "s" : ""} supprimé${r.fichiersSupprimes > 1 ? "s" : ""}${suffixe}`,
+      );
+      await recharger();
+      await chargerRapportCoherence();
+    } catch (err) {
+      toast.error("Suppression impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setActionCoherenceEnCours(false);
+    }
+  }
+
   return (
     <section className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
@@ -210,6 +331,13 @@ export function SessionDetailPage({
             <span className="text-sm text-muted-foreground">
               {session.type} · {session.date.toLocaleDateString("fr-FR")}
             </span>
+            <Button
+              variant="outline"
+              onClick={ouvrirControleCoherence}
+              disabled={chargementCoherence}
+            >
+              Contrôler la cohérence
+            </Button>
             <Button variant="outline" onClick={() => setEditionSession(true)}>
               Modifier
             </Button>
@@ -408,6 +536,200 @@ export function SessionDetailPage({
               }}
             >
               Renommer et enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={coherenceOuverte}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCoherenceOuverte(false);
+            setRapportCoherence(null);
+            setCheminsASupprimer(new Set());
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Contrôle de cohérence</DialogTitle>
+            <DialogDescription>
+              Compare les commandes avec le contenu réel du dossier export.
+              Le dossier source n'est jamais modifié.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto text-sm">
+            {chargementCoherence && (
+              <p className="text-muted-foreground">Analyse en cours…</p>
+            )}
+            {!chargementCoherence && rapportCoherence && (
+              <>
+                {rapportCoherence.photosFantomes.length === 0 &&
+                  rapportCoherence.exportsIncomplets.length === 0 &&
+                  rapportCoherence.orphelinsExport.length === 0 && (
+                    <p className="text-muted-foreground">
+                      Tout est cohérent, aucune action nécessaire.
+                    </p>
+                  )}
+
+                {rapportCoherence.photosFantomes.length > 0 && (
+                  <section className="flex flex-col gap-2">
+                    <h4 className="font-semibold">
+                      Photos fantômes ({rapportCoherence.photosFantomes.length})
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Référencées dans une commande mais absentes du dossier
+                      source.
+                    </p>
+                    <ul className="flex flex-col gap-0.5 text-xs">
+                      {rapportCoherence.photosFantomes.map((f) => {
+                        const ach = session.acheteurs.find(
+                          (a) => a.id === f.acheteurId,
+                        );
+                        return (
+                          <li
+                            key={`${f.commandeId}-${f.photoNumero}`}
+                            className="flex justify-between"
+                          >
+                            <span>
+                              {ach?.nom ?? f.acheteurId} · photo n°
+                              {f.photoNumero}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {f.tirageIds.length} tirage
+                              {f.tirageIds.length > 1 ? "s" : ""}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={retirerTiragesFantomes}
+                      disabled={actionCoherenceEnCours}
+                      className="self-start"
+                    >
+                      Retirer tous ces tirages
+                    </Button>
+                  </section>
+                )}
+
+                {rapportCoherence.exportsIncomplets.length > 0 && (
+                  <section className="flex flex-col gap-2">
+                    <h4 className="font-semibold">
+                      Exports à refaire (
+                      {rapportCoherence.exportsIncomplets.length})
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      La photo existe en source mais des fichiers d'export
+                      manquent sur disque.
+                    </p>
+                    <ul className="flex flex-col gap-0.5 text-xs">
+                      {rapportCoherence.exportsIncomplets.map((e) => {
+                        const ach = session.acheteurs.find(
+                          (a) => a.id === e.acheteurId,
+                        );
+                        return (
+                          <li
+                            key={e.commandeId}
+                            className="flex justify-between"
+                          >
+                            <span>{ach?.nom ?? e.acheteurId}</span>
+                            <span className="text-muted-foreground">
+                              {e.fichiersManquants}/{e.fichiersAttendus} manquant
+                              {e.fichiersManquants > 1 ? "s" : ""}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={reexporterCommandesIncompletes}
+                      disabled={actionCoherenceEnCours}
+                      className="self-start"
+                    >
+                      Ré-exporter les commandes concernées
+                    </Button>
+                  </section>
+                )}
+
+                {rapportCoherence.orphelinsExport.length > 0 && (
+                  <section className="flex flex-col gap-2">
+                    <h4 className="font-semibold">
+                      Fichiers orphelins dans l'export (
+                      {rapportCoherence.orphelinsExport.length})
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Fichiers présents dans le dossier export qui ne
+                      correspondent à aucune commande courante (tirages
+                      retirés, acheteurs supprimés, anciens noms après
+                      renommage…). Décoche ceux que tu veux garder.
+                    </p>
+                    <ul className="flex flex-col gap-0.5 text-xs">
+                      {rapportCoherence.orphelinsExport.map((o) => {
+                        const coche = cheminsASupprimer.has(o.cheminAbsolu);
+                        const acheteur = o.acheteurIdConnu
+                          ? session.acheteurs.find(
+                              (a) => a.id === o.acheteurIdConnu,
+                            )
+                          : null;
+                        const libelleAcheteur = acheteur
+                          ? acheteur.nom
+                          : "(acheteur supprimé)";
+                        return (
+                          <li key={o.cheminAbsolu}>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={coche}
+                                onChange={(ev) => {
+                                  setCheminsASupprimer((prev) => {
+                                    const next = new Set(prev);
+                                    if (ev.currentTarget.checked)
+                                      next.add(o.cheminAbsolu);
+                                    else next.delete(o.cheminAbsolu);
+                                    return next;
+                                  });
+                                }}
+                              />
+                              <span>
+                                {libelleAcheteur} · photo n°{o.photoNumero} ·{" "}
+                                {o.sousDossier} · ex. {o.exemplaire}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={supprimerOrphelinsSelectionnes}
+                      disabled={
+                        actionCoherenceEnCours ||
+                        cheminsASupprimer.size === 0
+                      }
+                      className="self-start"
+                    >
+                      Supprimer {cheminsASupprimer.size} fichier
+                      {cheminsASupprimer.size > 1 ? "s" : ""}
+                    </Button>
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setCoherenceOuverte(false)}
+              disabled={actionCoherenceEnCours}
+            >
+              Fermer
             </Button>
           </DialogFooter>
         </DialogContent>

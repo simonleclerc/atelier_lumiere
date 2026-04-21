@@ -11,10 +11,12 @@ import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessio
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
+import type { ControlerCoherenceSessionUseCase } from "@/domain/usecases/ControlerCoherenceSession";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
 import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import type { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
+import type { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 import type { SauvegardeFichierPicker } from "@/ui/ports/SauvegardeFichierPicker";
 import { Toaster } from "@/ui/components/ui/sonner";
@@ -32,6 +34,8 @@ interface AppProps {
   retirerTirageDeCommande: RetirerTirageDeCommandeUseCase;
   exporterCommande: ExporterCommandeUseCase;
   exporterSession: ExporterSessionUseCase;
+  controlerCoherenceSession: ControlerCoherenceSessionUseCase;
+  supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
   exporterSauvegarde: ExporterSauvegardeUseCase;
   importerSauvegarde: ImporterSauvegardeUseCase;
   dossierPicker: DossierPicker;
@@ -53,6 +57,8 @@ function App({
   retirerTirageDeCommande,
   exporterCommande,
   exporterSession,
+  controlerCoherenceSession,
+  supprimerOrphelinsExport,
   exporterSauvegarde,
   importerSauvegarde,
   dossierPicker,
@@ -88,6 +94,8 @@ function App({
             retirerTirage={retirerTirageDeCommande}
             exporterCommande={exporterCommande}
             exporterSession={exporterSession}
+            controlerCoherenceSession={controlerCoherenceSession}
+            supprimerOrphelinsExport={supprimerOrphelinsExport}
             dossierPicker={dossierPicker}
             onRetour={() => setVue({ nom: "liste" })}
           />

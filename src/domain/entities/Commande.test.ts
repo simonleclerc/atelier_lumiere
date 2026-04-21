@@ -5,6 +5,7 @@ import { Montant } from "../value-objects/Montant";
 import {
   Commande,
   estFichierExportDeSlug,
+  parserNomFichierExport,
   slugifierNomAcheteur,
   TirageIntrouvable,
 } from "./Commande";
@@ -327,5 +328,27 @@ describe("estFichierExportDeSlug", () => {
     expect(estFichierExportDeSlug("martin_145_1.png", "martin")).toBe(false);
     expect(estFichierExportDeSlug("martin_145.jpg", "martin")).toBe(false);
     expect(estFichierExportDeSlug(".DS_Store", "martin")).toBe(false);
+  });
+});
+
+describe("parserNomFichierExport", () => {
+  it("extrait slug, photoNumero, exemplaire", () => {
+    expect(parserNomFichierExport("martin_145_1.jpg")).toEqual({
+      slug: "martin",
+      photoNumero: 145,
+      exemplaire: 1,
+    });
+    expect(parserNomFichierExport("martin_dupont_3_12.jpg")).toEqual({
+      slug: "martin_dupont",
+      photoNumero: 3,
+      exemplaire: 12,
+    });
+  });
+
+  it("retourne null sur les fichiers hors convention", () => {
+    expect(parserNomFichierExport(".DS_Store")).toBeNull();
+    expect(parserNomFichierExport("martin_145.jpg")).toBeNull();
+    expect(parserNomFichierExport("martin_abc_1.jpg")).toBeNull();
+    expect(parserNomFichierExport("martin_145_1.png")).toBeNull();
   });
 });

@@ -19,7 +19,7 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 - [x] Voir si l'export est à jour pour toutes les commandes d'une session <!-- badge agrégé dans le récapitulatif de la session, priorité erreur > mixte > complet/pas-exporté -->
 
 - [ ] Rescanner le dossier source (si les photos dedans ont changé)
-- [ ] Détecter les photos fantômes (référencées dans une commande mais disparues du dossier source)
+- [x] Contrôler la cohérence d'une session <!-- bouton qui croise commandes × dossier source × dossier export ; 3 catégories : photos fantômes (tirage qui pointe vers un fichier source absent → retirer les tirages), exports à refaire (fichier attendu manquant dans le dossier export → ré-exporter la commande), orphelins dans l'export (fichiers {slug}_N_i.jpg plus rattachés à aucun tirage courant → suppression opt-in avec checkboxes). Le dossier SOURCE n'est JAMAIS modifié. Use cases ControlerCoherenceSession + SupprimerOrphelinsExport -->
 
 ## Saisie de commande
 
@@ -42,3 +42,9 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 
 - [ ] Pas de delete physique : soft delete uniquement
 - [x] Backup / export des données de l'app (pas juste les photos) + import pour restaurer
+
+## other
+- [ ] mettre une limite sur les photo numerique, une seule max
+- [ ] rajouter une offre sur la session, si un montant est dépassé (par exemple 70€), alors on inclut le format numérique de toutes les photos commandées gratuitement.
+  - il faudra prendre en compte ca au scan, si l'offre est active, on les rajoute. A l'inverse si les numériques sont toutes dispo mais que la commande n'est plus au bon montant => on supprimer les numériques
+  - a voir ensemble, mais peut etre gerer ca avec des event => lorsque le montant d'une commande change -> on fait le check si il faut toucher les fichiers numériques

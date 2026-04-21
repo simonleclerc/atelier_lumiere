@@ -248,6 +248,28 @@ export function estFichierExportDeSlug(
 }
 
 /**
+ * Parsing inverse de la convention d'export : depuis un nom de fichier
+ * `{slug}_{photoNumero}_{i}.jpg`, extrait ses trois composants. Retourne
+ * `null` si le nom ne suit pas la convention (fichier hors scope, ex :
+ * `.DS_Store`, `notes.txt`, `martin_abc.jpg`).
+ *
+ * Utilisé par le contrôle de cohérence pour inspecter les fichiers
+ * orphelins du dossier export sans avoir à connaître la liste des
+ * slugs en amont.
+ */
+export function parserNomFichierExport(
+  nomFichier: string,
+): { slug: string; photoNumero: number; exemplaire: number } | null {
+  const match = /^(.+)_(\d+)_(\d+)\.jpg$/.exec(nomFichier);
+  if (!match) return null;
+  const photoNumero = Number.parseInt(match[2], 10);
+  const exemplaire = Number.parseInt(match[3], 10);
+  if (!Number.isInteger(photoNumero) || photoNumero < 1) return null;
+  if (!Number.isInteger(exemplaire) || exemplaire < 1) return null;
+  return { slug: match[1], photoNumero, exemplaire };
+}
+
+/**
  * Normalise un nom d'acheteur en slug compatible filesystem :
  * trim, lowercase, accents dépouillés, espaces → underscore, strip du
  * reste. Pur, testé, sans dépendance externe.
