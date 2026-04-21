@@ -1,21 +1,17 @@
-import { useMemo, useState } from "react";
-import { CheckIcon, ImageIcon } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Button, buttonVariants } from "@/ui/components/ui/button";
+import { Button } from "@/ui/components/ui/button";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/ui/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/ui/components/ui/popover";
-import { cn } from "@/ui/lib/utils";
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxValue,
+} from "@/ui/components/ui/combobox";
 import type { Session } from "@/domain/entities/Session";
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import { Format } from "@/domain/value-objects/Format";
@@ -35,41 +31,22 @@ export function AjouterTiragesForm({
   onAjoutes,
   onAnnuler,
 }: Props) {
-  const [photosSaisie, setPhotosSaisie] = useState("");
+  const [numerosSelectionnes, setNumerosSelectionnes] = useState<number[]>([]);
   const [format, setFormat] = useState<string>(Format.TOUS[0].toDossierName());
   const [quantite, setQuantite] = useState("1");
   const [enCours, setEnCours] = useState(false);
-  const [selecteurOuvert, setSelecteurOuvert] = useState(false);
 
-  // Les numéros valides dans la saisie courante. Si l'utilisateur est
-  // en train de taper "1,3,a,5", on garde [1, 3, 5] comme sélection
-  // visible dans le popover — la validation stricte se fait au submit.
-  const numerosSelectionnes = useMemo(
-    () => parserNumerosPhotosTolerant(photosSaisie),
-    [photosSaisie],
-  );
-  const setSelectionnes = new Set(numerosSelectionnes);
-
-  function toggleNumero(n: number): void {
-    const present = setSelectionnes.has(n);
-    const nouveaux = present
-      ? numerosSelectionnes.filter((x) => x !== n)
-      : [...numerosSelectionnes, n];
-    setPhotosSaisie(nouveaux.join(","));
-  }
+  const items = session.photos.map((p) => p.numero);
 
   async function soumettre(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setEnCours(true);
     try {
-      const numeros = parserNumerosPhotos(photosSaisie);
-      if (numeros.length === 0) {
-        throw new Error(
-          "Indique au moins un numéro de photo (ex : 145 ou 1,3,155).",
-        );
+      if (numerosSelectionnes.length === 0) {
+        throw new Error("Sélectionne au moins une photo.");
       }
       const quantiteNum = Number(quantite);
-      for (const n of numeros) {
+      for (const n of numerosSelectionnes) {
         await ajouterTirage.execute({
           sessionId: session.id,
           acheteurId,
@@ -78,10 +55,10 @@ export function AjouterTiragesForm({
           quantite: quantiteNum,
         });
       }
-      toast.success(
-        `${numeros.length} photo${numeros.length > 1 ? "s" : ""} ajoutée${numeros.length > 1 ? "s" : ""}`,
-        { description: `Format ${format} · quantité ${quantiteNum} par photo` },
-      );
+      const nb = numerosSelectionnes.length;
+      toast.success(`${nb} photo${nb > 1 ? "s" : ""} ajoutée${nb > 1 ? "s" : ""}`, {
+        description: `Format ${format} · quantité ${quantiteNum} par photo`,
+      });
       onAjoutes();
     } catch (err) {
       toast.error("Ajout impossible", {
@@ -101,74 +78,39 @@ export function AjouterTiragesForm({
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-1 flex-col gap-1 text-sm">
           Photo(s)
-          <div className="flex items-stretch gap-1">
-            <input
-              type="text"
-              value={photosSaisie}
-              onChange={(e) => setPhotosSaisie(e.currentTarget.value)}
-              placeholder="145 ou 1,3,155"
-              required
-              autoFocus
-              className="min-w-[140px] flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <Popover open={selecteurOuvert} onOpenChange={setSelecteurOuvert}>
-              <PopoverTrigger
-                type="button"
+          <Combobox
+            items={items}
+            multiple
+            value={numerosSelectionnes}
+            onValueChange={setNumerosSelectionnes}
+          >
+            <ComboboxChips>
+              <ComboboxValue>
+                {numerosSelectionnes.map((n) => (
+                  <ComboboxChip key={n}>n°{n}</ComboboxChip>
+                ))}
+              </ComboboxValue>
+              <ComboboxChipsInput
+                placeholder={
+                  numerosSelectionnes.length === 0
+                    ? "Chercher un numéro…"
+                    : ""
+                }
+                autoFocus
                 disabled={session.photos.length === 0}
-                aria-label="Parcourir les photos"
-                className={cn(
-                  buttonVariants({ variant: "outline" }),
-                  "shrink-0 px-3 py-2",
+              />
+            </ComboboxChips>
+            <ComboboxContent>
+              <ComboboxEmpty>Aucune photo trouvée.</ComboboxEmpty>
+              <ComboboxList>
+                {(n: number) => (
+                  <ComboboxItem key={n} value={n}>
+                    Photo n°{n}
+                  </ComboboxItem>
                 )}
-              >
-                <ImageIcon className="size-4" />
-              </PopoverTrigger>
-              <PopoverContent className="w-72 p-0" align="end">
-                <Command>
-                  <CommandInput placeholder="Rechercher un numéro…" />
-                  <CommandList>
-                    <CommandEmpty>Aucune photo trouvée.</CommandEmpty>
-                    <CommandGroup>
-                      {session.photos.map((p) => {
-                        const selectionne = setSelectionnes.has(p.numero);
-                        return (
-                          <CommandItem
-                            key={p.numero}
-                            value={String(p.numero)}
-                            onSelect={() => toggleNumero(p.numero)}
-                          >
-                            <CheckIcon
-                              className={cn(
-                                "size-4",
-                                selectionne ? "opacity-100" : "opacity-0",
-                              )}
-                            />
-                            Photo n°{p.numero}
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
-                  </CommandList>
-                  <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs text-muted-foreground">
-                    <span>
-                      {numerosSelectionnes.length} photo
-                      {numerosSelectionnes.length > 1 ? "s" : ""} sélectionnée
-                      {numerosSelectionnes.length > 1 ? "s" : ""}
-                    </span>
-                    {numerosSelectionnes.length > 0 && (
-                      <button
-                        type="button"
-                        className="text-xs text-destructive hover:underline"
-                        onClick={() => setPhotosSaisie("")}
-                      >
-                        Tout désélectionner
-                      </button>
-                    )}
-                  </div>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          </div>
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Format
@@ -205,7 +147,11 @@ export function AjouterTiragesForm({
         </Button>
         <Button
           type="submit"
-          disabled={enCours || session.photos.length === 0}
+          disabled={
+            enCours ||
+            session.photos.length === 0 ||
+            numerosSelectionnes.length === 0
+          }
         >
           {enCours ? "…" : "Ajouter"}
         </Button>
@@ -217,52 +163,4 @@ export function AjouterTiragesForm({
       )}
     </form>
   );
-}
-
-/**
- * Accepte "145", "1,3,155", "  7 , 12 ,3  ". Rejette tout ce qui n'est pas
- * entier ≥ 1. Dédoublonne en préservant l'ordre de saisie.
- */
-function parserNumerosPhotos(saisie: string): number[] {
-  const morceaux = saisie
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  const numeros: number[] = [];
-  const vus = new Set<number>();
-  for (const m of morceaux) {
-    const n = Number(m);
-    if (!Number.isInteger(n) || n < 1) {
-      throw new Error(
-        `"${m}" n'est pas un numéro de photo valide (entier ≥ 1 attendu).`,
-      );
-    }
-    if (!vus.has(n)) {
-      vus.add(n);
-      numeros.push(n);
-    }
-  }
-  return numeros;
-}
-
-/**
- * Version tolérante pour nourrir le popover pendant la frappe : ignore
- * les morceaux invalides au lieu de lever. Sert uniquement à calculer
- * l'état visuel du sélecteur tant que l'utilisateur tape ; la
- * validation stricte reste `parserNumerosPhotos` au submit.
- */
-function parserNumerosPhotosTolerant(saisie: string): number[] {
-  const numeros: number[] = [];
-  const vus = new Set<number>();
-  for (const m of saisie.split(",")) {
-    const trim = m.trim();
-    if (!trim) continue;
-    const n = Number(trim);
-    if (!Number.isInteger(n) || n < 1) continue;
-    if (!vus.has(n)) {
-      vus.add(n);
-      numeros.push(n);
-    }
-  }
-  return numeros;
 }

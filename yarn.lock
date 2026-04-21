@@ -261,21 +261,21 @@
     "@babel/helper-string-parser" "^7.27.1"
     "@babel/helper-validator-identifier" "^7.28.5"
 
-"@base-ui/react@^1.4.0":
-  version "1.4.0"
-  resolved "https://registry.yarnpkg.com/@base-ui/react/-/react-1.4.0.tgz#7c1445fefcbb21952620f6b67cb0b4af91194c25"
-  integrity sha512-QcqdVbr/+ba2/RAKJIV1PV6S02Q5+r6a4Eym8ndBw+ZbBILkkmQAyRxXCg/pArrHnkrGeU8goe26aw0h6eE8pg==
+"@base-ui/react@^1.4.1":
+  version "1.4.1"
+  resolved "https://registry.yarnpkg.com/@base-ui/react/-/react-1.4.1.tgz#42afd3733893bc26611f6ebb28efabc67e6866f1"
+  integrity sha512-Ab5/LIhcmL8BQcsBUYiOfkSDRdLpvgUBzMK30cu684JPcLclYlztharvCZyNNgzJtbAiREzI9q0pI5erHCMgCw==
   dependencies:
     "@babel/runtime" "^7.29.2"
-    "@base-ui/utils" "0.2.7"
+    "@base-ui/utils" "0.2.8"
     "@floating-ui/react-dom" "^2.1.8"
     "@floating-ui/utils" "^0.2.11"
     use-sync-external-store "^1.6.0"
 
-"@base-ui/utils@0.2.7":
-  version "0.2.7"
-  resolved "https://registry.yarnpkg.com/@base-ui/utils/-/utils-0.2.7.tgz#a7a57d08af6d02a905c0ca5e87b6dde85597046d"
-  integrity sha512-nXYKhiL/0JafyJE8PfcflipGftOftlIwKd72rU15iZ1M5yqgg5J9P8NHU71GReDuXco5MJA/eVQqUT5WRqX9sA==
+"@base-ui/utils@0.2.8":
+  version "0.2.8"
+  resolved "https://registry.yarnpkg.com/@base-ui/utils/-/utils-0.2.8.tgz#76ceecb4948eca3b990c982e0152f38350ef42b4"
+  integrity sha512-jvOi+c+ftGlGotNcKnzPVg2IhCaDTB6/6R3JeqdjdXktuAJi3wKH9T7+svuaKh1mmfVU11UWzUZVH74JDfi/wQ==
   dependencies:
     "@babel/runtime" "^7.29.2"
     "@floating-ui/utils" "^0.2.11"

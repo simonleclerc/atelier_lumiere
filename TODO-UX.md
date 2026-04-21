@@ -22,9 +22,8 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 
 ## Saisie de commande
 
-- [x] Select avec recherche et sélection multiple pour choisir les photos, **en plus** de l'input texte actuel <!-- cmdk + popover shadcn, bouton icône image à droite de l'input ; l'input texte reste source de vérité, le popover coche/décoche en mettant à jour la chaîne -->
+- [x] Select avec recherche et sélection multiple pour choisir les photos <!-- shadcn Combobox + ComboboxChips (base-ui) ; photos sélectionnées affichées en chips supprimables, la frappe clavier filtre la liste. Ancienne saisie texte libre "1,3,155,176" abandonnée au profit du combobox -->
 - [ ] Raccourcis clavier pour ajouter des photos aux commandes : tabulation correcte entre les champs + validation
-- [x] Saisie multi-photos : syntaxe type `1,3,155,176` pour les numéros, avec un seul champ format et un seul champ quantité → ajoute les photos 1, 3, 155, 176 avec le format et la quantité désignés
 
 ## Récap & reporting
 
