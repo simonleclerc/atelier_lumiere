@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/ui/components/ui/dialog";
 import { AcheteurForm } from "@/ui/components/AcheteurForm";
 import { AjouterTiragesForm } from "@/ui/components/AjouterTiragesForm";
 import { GrilleTarifaireEditor } from "@/ui/components/GrilleTarifaireEditor";
 import { SessionForm } from "@/ui/components/SessionForm";
 import { StatutBadge } from "@/ui/components/StatutBadge";
 import type { Acheteur } from "@/domain/entities/Acheteur";
-import type { Commande } from "@/domain/entities/Commande";
+import { slugifierNomAcheteur, type Commande } from "@/domain/entities/Commande";
 import type { Session } from "@/domain/entities/Session";
 import { Montant } from "@/domain/value-objects/Montant";
 import { StatutExport } from "@/domain/value-objects/StatutExport";
@@ -71,6 +79,11 @@ export function SessionDetailPage({
   const [nouvelAcheteurOuvert, setNouvelAcheteurOuvert] = useState(false);
   const [acheteurEnEdition, setAcheteurEnEdition] = useState<string | null>(null);
   const [triPar, setTriPar] = useState<TriAcheteurs>("ajout");
+  const [confirmationRenommage, setConfirmationRenommage] = useState<{
+    ancienNom: string;
+    nouveauNom: string;
+    resoudre: (ok: boolean) => void;
+  } | null>(null);
 
   const recharger = useCallback(async () => {
     setChargement(true);
@@ -296,13 +309,30 @@ export function SessionDetailPage({
                 onAnnuler={() => setAcheteurEnEdition(null)}
                 onSoumettre={async (valeurs) => {
                   try {
-                    const modifie = await modifierAcheteur.execute({
-                      sessionId: session.id,
-                      acheteurId: a.id,
-                      ...valeurs,
-                    });
+                    if (
+                      slugVaChanger(a.nom, valeurs.nom) &&
+                      commandeParAcheteur.has(a.id)
+                    ) {
+                      const ok = await new Promise<boolean>((resolve) => {
+                        setConfirmationRenommage({
+                          ancienNom: a.nom,
+                          nouveauNom: valeurs.nom,
+                          resoudre: resolve,
+                        });
+                      });
+                      if (!ok) return;
+                    }
+                    const { acheteur: modifie, fichiersRenommes } =
+                      await modifierAcheteur.execute({
+                        sessionId: session.id,
+                        acheteurId: a.id,
+                        ...valeurs,
+                      });
                     toast.success("Acheteur mis à jour", {
-                      description: modifie.nom,
+                      description:
+                        fichiersRenommes > 0
+                          ? `${modifie.nom} · ${fichiersRenommes} fichier${fichiersRenommes > 1 ? "s" : ""} renommé${fichiersRenommes > 1 ? "s" : ""}`
+                          : modifie.nom,
                     });
                     setAcheteurEnEdition(null);
                     recharger();
@@ -330,8 +360,70 @@ export function SessionDetailPage({
           )}
         </div>
       </section>
+
+      <Dialog
+        open={confirmationRenommage !== null}
+        onOpenChange={(open) => {
+          if (!open && confirmationRenommage) {
+            confirmationRenommage.resoudre(false);
+            setConfirmationRenommage(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Renommer les fichiers déjà exportés ?</DialogTitle>
+            <DialogDescription>
+              {confirmationRenommage && (
+                <>
+                  Le changement de nom «&nbsp;
+                  <strong>{confirmationRenommage.ancienNom}</strong>&nbsp;» →
+                  «&nbsp;<strong>{confirmationRenommage.nouveauNom}</strong>
+                  &nbsp;» modifie le préfixe utilisé pour nommer les fichiers
+                  exportés de cet acheteur. Les fichiers présents sur disque
+                  sous l'ancien préfixe seront renommés automatiquement pour
+                  suivre le nouveau nom. Aucune donnée n'est supprimée.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (confirmationRenommage) {
+                  confirmationRenommage.resoudre(false);
+                  setConfirmationRenommage(null);
+                }
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={() => {
+                if (confirmationRenommage) {
+                  confirmationRenommage.resoudre(true);
+                  setConfirmationRenommage(null);
+                }
+              }}
+            >
+              Renommer et enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
+}
+
+function slugVaChanger(ancienNom: string, nouveauNom: string): boolean {
+  try {
+    return (
+      slugifierNomAcheteur(ancienNom) !== slugifierNomAcheteur(nouveauNom)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function RecapSession({

@@ -17,6 +17,7 @@ import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMem
 import { TauriCommandeRepository } from "@/infrastructure/tauri/TauriCommandeRepository";
 import { TauriDossierPicker } from "@/infrastructure/tauri/TauriDossierPicker";
 import { TauriFileCopier } from "@/infrastructure/tauri/TauriFileCopier";
+import { TauriFileRenamer } from "@/infrastructure/tauri/TauriFileRenamer";
 import { TauriFileSystemScanner } from "@/infrastructure/tauri/TauriFileSystemScanner";
 import { TauriSauvegardeFichierIO } from "@/infrastructure/tauri/TauriSauvegardeFichierIO";
 import { TauriSauvegardeFichierPicker } from "@/infrastructure/tauri/TauriSauvegardeFichierPicker";
@@ -30,6 +31,7 @@ const sessionRepository = new TauriSessionRepository();
 const commandeRepository = new TauriCommandeRepository();
 const fileSystemScanner = new TauriFileSystemScanner();
 const fileCopier = new TauriFileCopier();
+const fileRenamer = new TauriFileRenamer();
 const sauvegardeFichierIO = new TauriSauvegardeFichierIO();
 const grilleParDefaut = new InMemoryGrilleTarifaireParDefautProvider();
 const dossierPicker = new TauriDossierPicker();
@@ -53,7 +55,11 @@ export const container = {
   ajouterAcheteurASession: new AjouterAcheteurASessionUseCase(
     sessionRepository,
   ),
-  modifierAcheteur: new ModifierAcheteurUseCase(sessionRepository),
+  modifierAcheteur: new ModifierAcheteurUseCase(
+    sessionRepository,
+    commandeRepository,
+    fileRenamer,
+  ),
   modifierInfosSession: new ModifierInfosSessionUseCase(sessionRepository),
   modifierPrixSession: new ModifierPrixSessionUseCase(sessionRepository),
 
