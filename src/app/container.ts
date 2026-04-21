@@ -17,6 +17,8 @@ import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMem
 import { TauriCommandeRepository } from "@/infrastructure/tauri/TauriCommandeRepository";
 import { TauriDossierPicker } from "@/infrastructure/tauri/TauriDossierPicker";
 import { TauriFileCopier } from "@/infrastructure/tauri/TauriFileCopier";
+import { TauriFileLister } from "@/infrastructure/tauri/TauriFileLister";
+import { TauriFileRemover } from "@/infrastructure/tauri/TauriFileRemover";
 import { TauriFileRenamer } from "@/infrastructure/tauri/TauriFileRenamer";
 import { TauriFileSystemScanner } from "@/infrastructure/tauri/TauriFileSystemScanner";
 import { TauriSauvegardeFichierIO } from "@/infrastructure/tauri/TauriSauvegardeFichierIO";
@@ -31,6 +33,8 @@ const sessionRepository = new TauriSessionRepository();
 const commandeRepository = new TauriCommandeRepository();
 const fileSystemScanner = new TauriFileSystemScanner();
 const fileCopier = new TauriFileCopier();
+const fileLister = new TauriFileLister();
+const fileRemover = new TauriFileRemover();
 const fileRenamer = new TauriFileRenamer();
 const sauvegardeFichierIO = new TauriSauvegardeFichierIO();
 const grilleParDefaut = new InMemoryGrilleTarifaireParDefautProvider();
@@ -42,6 +46,8 @@ const exporterCommande = new ExporterCommandeUseCase(
   commandeRepository,
   sessionRepository,
   fileCopier,
+  fileLister,
+  fileRemover,
 );
 
 export const container = {

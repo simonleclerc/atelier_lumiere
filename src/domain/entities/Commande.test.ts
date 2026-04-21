@@ -4,6 +4,7 @@ import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
 import {
   Commande,
+  estFichierExportDeSlug,
   slugifierNomAcheteur,
   TirageIntrouvable,
 } from "./Commande";
@@ -306,5 +307,25 @@ describe("slugifierNomAcheteur", () => {
   it("refuse un nom qui ne laisse aucun caractère exploitable", () => {
     expect(() => slugifierNomAcheteur("   ")).toThrow();
     expect(() => slugifierNomAcheteur("???")).toThrow(/exploitable/);
+  });
+});
+
+describe("estFichierExportDeSlug", () => {
+  it("matche {slug}_{photo}_{i}.jpg", () => {
+    expect(estFichierExportDeSlug("martin_145_1.jpg", "martin")).toBe(true);
+    expect(estFichierExportDeSlug("martin_dupont_1_12.jpg", "martin_dupont"))
+      .toBe(true);
+  });
+
+  it("rejette un slug qui est préfixe d'un autre (évite les faux positifs)", () => {
+    expect(estFichierExportDeSlug("martin_dupont_1_1.jpg", "martin")).toBe(
+      false,
+    );
+  });
+
+  it("rejette les fichiers hors convention", () => {
+    expect(estFichierExportDeSlug("martin_145_1.png", "martin")).toBe(false);
+    expect(estFichierExportDeSlug("martin_145.jpg", "martin")).toBe(false);
+    expect(estFichierExportDeSlug(".DS_Store", "martin")).toBe(false);
   });
 });

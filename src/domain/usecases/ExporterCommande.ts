@@ -1,6 +1,13 @@
+import {
+  estFichierExportDeSlug,
+  slugifierNomAcheteur,
+} from "../entities/Commande";
 import type { CommandeRepository } from "../ports/CommandeRepository";
 import type { FileCopier } from "../ports/FileCopier";
+import type { FileLister } from "../ports/FileLister";
+import type { FileRemover } from "../ports/FileRemover";
 import type { SessionRepository } from "../ports/SessionRepository";
+import { Format } from "../value-objects/Format";
 import { AcheteurNAppartientPasASession } from "./erreurs-cross-aggregate";
 
 /**
@@ -10,15 +17,18 @@ import { AcheteurNAppartientPasASession } from "./erreurs-cross-aggregate";
  * `dossierExport/{format}/` en N exemplaires (N = quantité), renommés
  * `{acheteur}_{photo}_{i}.jpg`.
  *
- * Idempotent : relancer l'export réécrase les mêmes fichiers. Pas de suivi
- * d'état "commande exportée" en V1 — YAGNI, la présence des fichiers dans
- * le dossier export suffit au copain pour savoir où il en est.
+ * Idempotent : relancer l'export réécrase les mêmes fichiers. En plus, un
+ * ré-export **nettoie les orphelins** — les fichiers sur disque qui
+ * portent le slug de l'acheteur mais qui ne sont plus dans la commande
+ * (tirages retirés depuis le dernier export, format changé…) sont
+ * supprimés avant la copie. Résultat : le dossier export reflète
+ * exactement l'état courant de la commande.
  *
  * Choix de design : le NOMMAGE et les sous-dossiers sont calculés par
- * `Commande.nomsFichiersExport` (méthode pure). Le use case ne fait
- * qu'orchestrer l'I/O. Séparation : le domaine dit QUOI créer, le use
- * case dit QUAND et COMMENT le faire. C'est exactement la raison d'être
- * d'un use case.
+ * `Commande.nomsFichiersExport` (méthode pure), et la reconnaissance
+ * d'un fichier appartenant à un slug par `estFichierExportDeSlug`
+ * (pur, exporté du même agrégat). Le use case ne fait qu'orchestrer
+ * l'I/O via ses ports.
  */
 export interface ExporterCommandeEntree {
   readonly commandeId: string;
@@ -26,6 +36,7 @@ export interface ExporterCommandeEntree {
 
 export interface ExporterCommandeResultat {
   readonly fichiersCrees: number;
+  readonly orphelinsSupprimes: number;
 }
 
 export class ExporterCommandeUseCase {
@@ -33,6 +44,8 @@ export class ExporterCommandeUseCase {
     private readonly commandeRepository: CommandeRepository,
     private readonly sessionRepository: SessionRepository,
     private readonly fileCopier: FileCopier,
+    private readonly fileLister: FileLister,
+    private readonly fileRemover: FileRemover,
   ) {}
 
   async execute(
@@ -49,7 +62,14 @@ export class ExporterCommandeUseCase {
     }
 
     const cibles = commande.nomsFichiersExport(acheteur.nom);
+    const slug = slugifierNomAcheteur(acheteur.nom);
+    let orphelinsSupprimes = 0;
     try {
+      orphelinsSupprimes = await this.nettoyerOrphelins(
+        session.dossierExport.valeur,
+        slug,
+        cibles,
+      );
       for (const cible of cibles) {
         const cheminSource = joinChemin(
           session.dossierSource.valeur,
@@ -73,7 +93,39 @@ export class ExporterCommandeUseCase {
     }
     commande.enregistrerExportReussi();
     await this.commandeRepository.save(commande);
-    return { fichiersCrees: cibles.length };
+    return { fichiersCrees: cibles.length, orphelinsSupprimes };
+  }
+
+  /**
+   * Nettoie les fichiers sur disque qui portent le slug de cet acheteur
+   * mais qui ne sont plus dans la liste des cibles actuelles. Parcourt
+   * TOUS les formats (pas seulement ceux de la commande courante), car
+   * un tirage peut avoir été retiré d'un format qui n'est plus utilisé.
+   */
+  private async nettoyerOrphelins(
+    dossierExport: string,
+    slug: string,
+    cibles: ReadonlyArray<{ sousDossier: string; nomFichier: string }>,
+  ): Promise<number> {
+    const attendus = new Set(
+      cibles.map((c) => joinChemin(c.sousDossier, c.nomFichier)),
+    );
+    let supprimes = 0;
+    for (const format of Format.TOUS) {
+      const sousDossier = format.toDossierName();
+      const dossier = joinChemin(dossierExport, sousDossier);
+      const fichiers = await this.fileLister.listerFichiers(dossier);
+      for (const nom of fichiers) {
+        if (!estFichierExportDeSlug(nom, slug)) continue;
+        const cle = joinChemin(sousDossier, nom);
+        if (attendus.has(cle)) continue;
+        const absolu = joinChemin(dossierExport, sousDossier, nom);
+        if (await this.fileRemover.supprimerSiExiste(absolu)) {
+          supprimes += 1;
+        }
+      }
+    }
+    return supprimes;
   }
 }
 

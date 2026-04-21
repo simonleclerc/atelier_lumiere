@@ -47,11 +47,14 @@ class InMemoryCommandeRepo implements CommandeRepository {
 
 /**
  * Stub minimal qui simule ExporterCommandeUseCase : pour chaque
- * commandeId, soit on retourne `{ fichiersCrees: N }`, soit on lève
- * l'erreur associée.
+ * commandeId, soit on retourne `{ fichiersCrees, orphelinsSupprimes }`,
+ * soit on lève l'erreur associée.
  */
 class StubExporterCommande {
-  readonly resultats = new Map<string, number>();
+  readonly resultats = new Map<
+    string,
+    { fichiersCrees: number; orphelinsSupprimes: number }
+  >();
   readonly echecs = new Map<string, string>();
 
   async execute(
@@ -61,7 +64,12 @@ class StubExporterCommande {
     if (messageEchec !== undefined) {
       throw new Error(messageEchec);
     }
-    return { fichiersCrees: this.resultats.get(entree.commandeId) ?? 0 };
+    return (
+      this.resultats.get(entree.commandeId) ?? {
+        fichiersCrees: 0,
+        orphelinsSupprimes: 0,
+      }
+    );
   }
 }
 
@@ -87,9 +95,9 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     ];
     const repo = new InMemoryCommandeRepo(commandes);
     const stub = new StubExporterCommande();
-    stub.resultats.set("cmd-A", 3);
-    stub.resultats.set("cmd-B", 2);
-    stub.resultats.set("cmd-C", 5);
+    stub.resultats.set("cmd-A", { fichiersCrees: 3, orphelinsSupprimes: 1 });
+    stub.resultats.set("cmd-B", { fichiersCrees: 2, orphelinsSupprimes: 0 });
+    stub.resultats.set("cmd-C", { fichiersCrees: 5, orphelinsSupprimes: 2 });
     const useCase = new ExporterSessionUseCase(
       repo,
       stub as unknown as ExporterCommandeUseCase,
@@ -100,6 +108,7 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     expect(r.commandesTotales).toBe(3);
     expect(r.commandesReussies).toBe(3);
     expect(r.fichiersCrees).toBe(10);
+    expect(r.orphelinsSupprimes).toBe(3);
     expect(r.erreurs).toEqual([]);
   });
 
@@ -112,9 +121,9 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     ];
     const repo = new InMemoryCommandeRepo(commandes);
     const stub = new StubExporterCommande();
-    stub.resultats.set("cmd-A", 3);
+    stub.resultats.set("cmd-A", { fichiersCrees: 3, orphelinsSupprimes: 0 });
     stub.echecs.set("cmd-B", "source manquante : /src/99.jpg");
-    stub.resultats.set("cmd-C", 5);
+    stub.resultats.set("cmd-C", { fichiersCrees: 5, orphelinsSupprimes: 0 });
     const useCase = new ExporterSessionUseCase(
       repo,
       stub as unknown as ExporterCommandeUseCase,
@@ -146,6 +155,7 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
       commandesTotales: 0,
       commandesReussies: 0,
       fichiersCrees: 0,
+      orphelinsSupprimes: 0,
       erreurs: [],
     });
   });
@@ -161,7 +171,7 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     const stub = new StubExporterCommande();
     stub.echecs.set("cmd-A", "erreur A");
     stub.echecs.set("cmd-B", "erreur B");
-    stub.resultats.set("cmd-C", 4);
+    stub.resultats.set("cmd-C", { fichiersCrees: 4, orphelinsSupprimes: 0 });
     const useCase = new ExporterSessionUseCase(
       repo,
       stub as unknown as ExporterCommandeUseCase,

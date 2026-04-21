@@ -33,6 +33,7 @@ export interface ExporterSessionResultat {
   readonly commandesTotales: number;
   readonly commandesReussies: number;
   readonly fichiersCrees: number;
+  readonly orphelinsSupprimes: number;
   readonly erreurs: readonly EchecExportCommande[];
 }
 
@@ -49,6 +50,7 @@ export class ExporterSessionUseCase {
       entree.sessionId,
     );
     let fichiersCrees = 0;
+    let orphelinsSupprimes = 0;
     const erreurs: EchecExportCommande[] = [];
 
     for (const commande of commandes) {
@@ -57,6 +59,7 @@ export class ExporterSessionUseCase {
           commandeId: commande.id,
         });
         fichiersCrees += r.fichiersCrees;
+        orphelinsSupprimes += r.orphelinsSupprimes;
       } catch (err) {
         erreurs.push({
           commandeId: commande.id,
@@ -70,6 +73,7 @@ export class ExporterSessionUseCase {
       commandesTotales: commandes.length,
       commandesReussies: commandes.length - erreurs.length,
       fichiersCrees,
+      orphelinsSupprimes,
       erreurs,
     };
   }

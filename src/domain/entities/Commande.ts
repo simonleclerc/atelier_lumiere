@@ -230,6 +230,24 @@ export class Commande {
 }
 
 /**
+ * Prédicat pur — est-ce qu'un nom de fichier (sans chemin) correspond
+ * au pattern d'export pour le slug donné ? Encapsule la convention de
+ * nommage `{slug}_{photoNumero}_{i}.jpg` pour que les use cases puissent
+ * filtrer le contenu d'un dossier sans la redupliquer.
+ *
+ * Match STRICT : "martin" ne matche PAS "martin_dupont_1_1.jpg" car la
+ * suite attendue est `_<digits>_<digits>.jpg`, pas un segment de slug.
+ */
+export function estFichierExportDeSlug(
+  nomFichier: string,
+  slug: string,
+): boolean {
+  const slugEchappe = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`^${slugEchappe}_\\d+_\\d+\\.jpg$`);
+  return regex.test(nomFichier);
+}
+
+/**
  * Normalise un nom d'acheteur en slug compatible filesystem :
  * trim, lowercase, accents dépouillés, espaces → underscore, strip du
  * reste. Pur, testé, sans dépendance externe.

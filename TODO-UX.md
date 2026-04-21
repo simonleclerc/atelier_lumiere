@@ -12,7 +12,7 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 
 ## Synchronisation export ↔ commandes
 
-- [ ] Resynchroniser l'export d'une commande pour un acheteur <!-- aujourd'hui le bouton Exporter de chaque commande est idempotent (écrase), il ne nettoie pas les anciens fichiers si des tirages ont été retirés — reste à faire -->
+- [x] Resynchroniser l'export d'une commande pour un acheteur <!-- ports FileLister + FileRemover ; ExporterCommande scanne tous les sous-dossiers de format avec un match strict `{slug}_{photo}_{i}.jpg` (évite la confusion martin vs martin_dupont) et supprime les orphelins avant la copie. Compteur remonté dans les toasts. -->
 - [x] Resynchroniser l'export de toute une session <!-- bouton Exporter toute la session, continue sur échec partiel avec rapport détaillé -->
 
 - [x] Voir si l'export est à jour pour une commande <!-- badge statut (pas-exporté/incomplet/erreur/complet) sur chaque acheteur, message d'erreur visible sous le nom ; pas de diff fichier-par-fichier — on se base sur l'état capturé au dernier export et sur les modifications depuis -->

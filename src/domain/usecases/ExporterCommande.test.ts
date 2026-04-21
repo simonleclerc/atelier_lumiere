@@ -6,6 +6,8 @@ import {
   type CommandeRepository,
 } from "../ports/CommandeRepository";
 import type { FileCopier } from "../ports/FileCopier";
+import type { FileLister } from "../ports/FileLister";
+import type { FileRemover } from "../ports/FileRemover";
 import {
   SessionIntrouvable,
   type SessionRepository,
@@ -128,17 +130,65 @@ class FakeFileCopier implements FileCopier {
   }
 }
 
+/**
+ * Fake FS : un map `dossier -> Set<nomFichier>` qui simule le contenu
+ * disque. `listerFichiers` retourne [] pour un dossier inconnu (cohérent
+ * avec la sémantique du port). `supprimerSiExiste` retire du set et
+ * retourne true, ou false si absent.
+ */
+class FakeFileSystem implements FileLister, FileRemover {
+  readonly dossiers = new Map<string, Set<string>>();
+  readonly suppressions: string[] = [];
+
+  ajouter(dossier: string, nomFichier: string): void {
+    if (!this.dossiers.has(dossier)) this.dossiers.set(dossier, new Set());
+    this.dossiers.get(dossier)!.add(nomFichier);
+  }
+
+  async listerFichiers(dossier: string): Promise<readonly string[]> {
+    return [...(this.dossiers.get(dossier) ?? new Set())];
+  }
+
+  async supprimerSiExiste(chemin: string): Promise<boolean> {
+    const sep = chemin.includes("\\") ? "\\" : "/";
+    const idx = chemin.lastIndexOf(sep);
+    const dossier = chemin.slice(0, idx);
+    const nom = chemin.slice(idx + 1);
+    const set = this.dossiers.get(dossier);
+    if (!set?.has(nom)) return false;
+    set.delete(nom);
+    this.suppressions.push(chemin);
+    return true;
+  }
+}
+
+function monter(
+  commandes: Commande[],
+  sessions: Session[],
+): {
+  useCase: ExporterCommandeUseCase;
+  sRepo: InMemorySessionRepo;
+  cRepo: InMemoryCommandeRepo;
+  copier: FakeFileCopier;
+  fs: FakeFileSystem;
+} {
+  const sRepo = new InMemorySessionRepo(sessions);
+  const cRepo = new InMemoryCommandeRepo(commandes);
+  const copier = new FakeFileCopier();
+  const fs = new FakeFileSystem();
+  const useCase = new ExporterCommandeUseCase(cRepo, sRepo, copier, fs, fs);
+  return { useCase, sRepo, cRepo, copier, fs };
+}
+
 describe("ExporterCommandeUseCase", () => {
   it("copie les fichiers de tous les tirages avec les bons chemins", async () => {
     const { session, commande } = setup();
-    const sRepo = new InMemorySessionRepo([session]);
-    const cRepo = new InMemoryCommandeRepo([commande]);
-    const copier = new FakeFileCopier();
-    const useCase = new ExporterCommandeUseCase(cRepo, sRepo, copier);
+    const { useCase, copier } = monter([commande], [session]);
 
     const resultat = await useCase.execute({ commandeId: commande.id });
 
     expect(resultat.fichiersCrees).toBe(4); // 3 + 1
+    expect(resultat.orphelinsSupprimes).toBe(0);
     expect(copier.copies).toEqual([
       {
         source: "/Users/copain/src/145.jpg",
@@ -175,12 +225,7 @@ describe("ExporterCommandeUseCase", () => {
       sessionId: session.id,
       acheteurId: acheteur.id,
     });
-    const copier = new FakeFileCopier();
-    const useCase = new ExporterCommandeUseCase(
-      new InMemoryCommandeRepo([commande]),
-      new InMemorySessionRepo([session]),
-      copier,
-    );
+    const { useCase, copier } = monter([commande], [session]);
 
     const resultat = await useCase.execute({ commandeId: commande.id });
 
@@ -190,12 +235,7 @@ describe("ExporterCommandeUseCase", () => {
 
   it("passe le statut de la commande à complet après un export réussi", async () => {
     const { session, commande } = setup();
-    const cRepo = new InMemoryCommandeRepo([commande]);
-    const useCase = new ExporterCommandeUseCase(
-      cRepo,
-      new InMemorySessionRepo([session]),
-      new FakeFileCopier(),
-    );
+    const { useCase, cRepo } = monter([commande], [session]);
 
     await useCase.execute({ commandeId: commande.id });
 
@@ -205,14 +245,8 @@ describe("ExporterCommandeUseCase", () => {
 
   it("passe le statut à erreur avec message si la copie échoue, et re-lance", async () => {
     const { session, commande } = setup();
-    const copier = new FakeFileCopier();
+    const { useCase, cRepo, copier } = monter([commande], [session]);
     copier.sourcesQuiEchouent.add("/Users/copain/src/145.jpg");
-    const cRepo = new InMemoryCommandeRepo([commande]);
-    const useCase = new ExporterCommandeUseCase(
-      cRepo,
-      new InMemorySessionRepo([session]),
-      copier,
-    );
 
     await expect(
       useCase.execute({ commandeId: commande.id }),
@@ -236,15 +270,95 @@ describe("ExporterCommandeUseCase", () => {
       photoNumeros: [145, 1],
       id: session.id,
     });
-    const useCase = new ExporterCommandeUseCase(
-      new InMemoryCommandeRepo([commande]),
-      new InMemorySessionRepo([sessionSansAcheteur]),
-      new FakeFileCopier(),
-    );
+    const { useCase } = monter([commande], [sessionSansAcheteur]);
 
     await expect(
       useCase.execute({ commandeId: commande.id }),
     ).rejects.toBeInstanceOf(AcheteurNAppartientPasASession);
+  });
+
+  describe("nettoyage des orphelins lors d'un ré-export", () => {
+    it("supprime les fichiers du slug qui ne sont plus dans la commande", async () => {
+      const { session, commande } = setup();
+      const { useCase, fs } = monter([commande], [session]);
+      // Simule un export précédent avec un tirage photo=300 format=15x23
+      // qui a été retiré depuis.
+      fs.ajouter("/Users/copain/export/15x23", "martin_dupont_300_1.jpg");
+      fs.ajouter("/Users/copain/export/15x23", "martin_dupont_300_2.jpg");
+      // Et un vieux fichier pour photo=145 en format abandonné (30x45)
+      fs.ajouter("/Users/copain/export/30x45", "martin_dupont_145_1.jpg");
+
+      const r = await useCase.execute({ commandeId: commande.id });
+
+      expect(r.orphelinsSupprimes).toBe(3);
+      expect([...fs.suppressions].sort()).toEqual([
+        "/Users/copain/export/15x23/martin_dupont_300_1.jpg",
+        "/Users/copain/export/15x23/martin_dupont_300_2.jpg",
+        "/Users/copain/export/30x45/martin_dupont_145_1.jpg",
+      ]);
+    });
+
+    it("ne touche pas aux fichiers d'autres acheteurs", async () => {
+      const { session, commande } = setup();
+      const { useCase, fs } = monter([commande], [session]);
+      fs.ajouter("/Users/copain/export/20x30", "alice_145_1.jpg");
+      fs.ajouter("/Users/copain/export/20x30", "bob_dupont_145_1.jpg");
+
+      const r = await useCase.execute({ commandeId: commande.id });
+
+      expect(r.orphelinsSupprimes).toBe(0);
+      expect(fs.suppressions).toHaveLength(0);
+    });
+
+    it("ne confond pas un slug préfixe d'un autre (martin vs martin_dupont)", async () => {
+      const session = Session.creer({
+        commanditaire: "X",
+        referent: "Y",
+        date: new Date("2026-04-01"),
+        type: "Spectacle",
+        dossierSource: new CheminDossier("/a"),
+        dossierExport: new CheminDossier("/b"),
+        grilleTarifaire: grille(),
+        photoNumeros: [1],
+      });
+      const martin = session.ajouterAcheteur({ nom: "Martin" });
+      const cmd = Commande.creer({
+        sessionId: session.id,
+        acheteurId: martin.id,
+      });
+      cmd.ajouterTirage({
+        photoNumero: 1,
+        format: Format._15x23,
+        quantite: 1,
+      });
+      const { useCase, fs } = monter([cmd], [session]);
+      // Fichier d'un AUTRE acheteur "Martin Dupont" en ré-export
+      fs.ajouter("/b/15x23", "martin_dupont_1_1.jpg");
+      // Fichier de Martin lui-même, orphelin (photo retirée fictive)
+      fs.ajouter("/b/15x23", "martin_2_1.jpg");
+
+      const r = await useCase.execute({ commandeId: cmd.id });
+
+      expect(r.orphelinsSupprimes).toBe(1);
+      expect(fs.suppressions).toEqual(["/b/15x23/martin_2_1.jpg"]);
+      // martin_dupont_* est resté
+      expect(fs.dossiers.get("/b/15x23")?.has("martin_dupont_1_1.jpg")).toBe(
+        true,
+      );
+    });
+
+    it("ignore les fichiers hors convention (.DS_Store, autres extensions)", async () => {
+      const { session, commande } = setup();
+      const { useCase, fs } = monter([commande], [session]);
+      fs.ajouter("/Users/copain/export/20x30", ".DS_Store");
+      fs.ajouter("/Users/copain/export/20x30", "martin_dupont_145_1.png");
+      fs.ajouter("/Users/copain/export/20x30", "notes.txt");
+
+      const r = await useCase.execute({ commandeId: commande.id });
+
+      expect(r.orphelinsSupprimes).toBe(0);
+      expect(fs.suppressions).toHaveLength(0);
+    });
   });
 });
 

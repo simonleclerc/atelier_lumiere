@@ -459,10 +459,14 @@ function RecapSession({
     try {
       const r = await exporterSession.execute({ sessionId: session.id });
       const cheminMsg = session.dossierExport.valeur;
+      const descriptionBase =
+        r.orphelinsSupprimes > 0
+          ? `${cheminMsg}\n${r.orphelinsSupprimes} orphelin${r.orphelinsSupprimes > 1 ? "s" : ""} nettoyé${r.orphelinsSupprimes > 1 ? "s" : ""}`
+          : cheminMsg;
       if (r.erreurs.length === 0) {
         toast.success(
           `${r.commandesReussies} commande${r.commandesReussies > 1 ? "s" : ""} · ${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""} exporté${r.fichiersCrees > 1 ? "s" : ""}`,
-          { description: cheminMsg },
+          { description: descriptionBase },
         );
       } else {
         const details = r.erreurs
@@ -471,9 +475,13 @@ function RecapSession({
             return `• ${ach?.nom ?? e.acheteurId} : ${e.message}`;
           })
           .join("\n");
+        const descriptionErreurs =
+          r.orphelinsSupprimes > 0
+            ? `${r.orphelinsSupprimes} orphelin${r.orphelinsSupprimes > 1 ? "s" : ""} nettoyé${r.orphelinsSupprimes > 1 ? "s" : ""}\n${details}`
+            : details;
         toast.warning(
           `${r.commandesReussies}/${r.commandesTotales} commandes exportées · ${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""}`,
-          { description: details, duration: 10000 },
+          { description: descriptionErreurs, duration: 10000 },
         );
       }
     } catch (err) {
@@ -555,9 +563,13 @@ function AcheteurCard({
     setExportEnCours(true);
     try {
       const r = await exporterCommande.execute({ commandeId: commande.id });
+      const description =
+        r.orphelinsSupprimes > 0
+          ? `${session.dossierExport.valeur}\n${r.orphelinsSupprimes} orphelin${r.orphelinsSupprimes > 1 ? "s" : ""} nettoyé${r.orphelinsSupprimes > 1 ? "s" : ""}`
+          : session.dossierExport.valeur;
       toast.success(
         `${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""} exporté${r.fichiersCrees > 1 ? "s" : ""}`,
-        { description: session.dossierExport.valeur },
+        { description },
       );
     } catch (err) {
       toast.error("Export échoué", {
