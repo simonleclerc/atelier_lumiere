@@ -37,7 +37,7 @@ Les installeurs sont disponibles sur la [page des releases](https://github.com/s
 | Système | Fichier à télécharger |
 | --- | --- |
 | macOS (Intel ou Apple Silicon) | `atelier_lumiere_x.y.z_universal.dmg` |
-| Windows 10/11 | `atelier_lumiere_x.y.z_x64_fr-FR.msi` |
+| Windows 10/11 | `atelier_lumiere_x.y.z_x64-setup.exe` ou `atelier_lumiere_x.y.z_x64_en-US.msi` |
 
 ### Premier lancement (important)
 
