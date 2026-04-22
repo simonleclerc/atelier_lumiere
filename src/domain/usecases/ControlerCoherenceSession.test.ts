@@ -96,6 +96,17 @@ class FakeFileLister implements FileLister {
   async listerFichiers(dossier: string): Promise<readonly string[]> {
     return [...(this.dossiers.get(dossier) ?? new Set())];
   }
+  async listerDossiers(dossier: string): Promise<readonly string[]> {
+    const prefixe = dossier.endsWith("/") ? dossier : `${dossier}/`;
+    const sous = new Set<string>();
+    for (const cle of this.dossiers.keys()) {
+      if (!cle.startsWith(prefixe)) continue;
+      const reste = cle.slice(prefixe.length);
+      if (!reste) continue;
+      sous.add(reste.split("/")[0]);
+    }
+    return [...sous];
+  }
 }
 
 function sessionAvec(numeros: number[]): {
@@ -353,5 +364,53 @@ describe("ControlerCoherenceSessionUseCase", () => {
     expect(r.photosFantomes).toEqual([]);
     expect(r.exportsIncomplets).toEqual([]);
     expect(r.orphelinsExport).toEqual([]);
+  });
+
+  it("détecte les orphelins numériques dans les sous-dossiers email", async () => {
+    const session = Session.creer({
+      commanditaire: "X",
+      referent: "Y",
+      date: new Date("2026-04-01"),
+      type: "Spectacle",
+      dossierSource: new CheminDossier("/src"),
+      dossierExport: new CheminDossier("/exp"),
+      grilleTarifaire: grille(),
+      photoNumeros: [1],
+    });
+    const martin = session.ajouterAcheteur({
+      nom: "Martin",
+      email: "martin@example.com",
+    });
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: martin.id,
+    });
+    commande.ajouterTirage({
+      photoNumero: 1,
+      format: Format.NUMERIQUE,
+      quantite: 1,
+    });
+    const fs = new FakeFileLister();
+    fs.ajouter("/src", "1.jpg");
+    // Attendu (slug martin, commande actuelle) :
+    fs.ajouter("/exp/Numerique/martin@example.com", "martin1.1.1.jpg");
+    // Orphelin : même acheteur, ancien email
+    fs.ajouter("/exp/Numerique/ancien@example.com", "martin2.1.1.jpg");
+    // Orphelin : autre acheteur disparu
+    fs.ajouter("/exp/Numerique/alice@example.com", "alice3.5.1.jpg");
+
+    const useCase = new ControlerCoherenceSessionUseCase(
+      new InMemorySessionRepo([session]),
+      new InMemoryCommandeRepo([commande]),
+      fs,
+    );
+
+    const r = await useCase.execute({ sessionId: session.id });
+    expect(r.exportsIncomplets).toEqual([]);
+    const orphelins = r.orphelinsExport.map((o) => o.cheminAbsolu).sort();
+    expect(orphelins).toEqual([
+      "/exp/Numerique/alice@example.com/alice3.5.1.jpg",
+      "/exp/Numerique/ancien@example.com/martin2.1.1.jpg",
+    ]);
   });
 });

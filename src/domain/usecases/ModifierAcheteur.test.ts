@@ -297,4 +297,71 @@ describe("ModifierAcheteurUseCase", () => {
     expect(fichiersRenommes).toBe(0);
     expect(fs.appels).toHaveLength(0);
   });
+
+  it("déplace les fichiers numériques quand l'email change sans que le nom bouge", async () => {
+    // Setup : session avec un acheteur Martin qui a déjà un email et un
+    // tirage numérique exporté sous son ancien email.
+    const { session } = setup();
+    const acheteur = session.ajouterAcheteur({
+      nom: "Jean",
+      email: "jean@ancien.com",
+    });
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: acheteur.id,
+    });
+    commande.ajouterTirage({
+      photoNumero: 1,
+      format: Format.NUMERIQUE,
+      quantite: 1,
+    });
+    const fichiersAvant = ["/b/Numerique/jean@ancien.com/jean1.1.1.jpg"];
+    const sessions = new InMemorySessionRepo([session]);
+    const commandes = new InMemoryCommandeRepo([commande]);
+    const fs = new FakeFileRenamer(fichiersAvant);
+    const useCase = new ModifierAcheteurUseCase(sessions, commandes, fs);
+
+    const { fichiersRenommes } = await useCase.execute({
+      sessionId: session.id,
+      acheteurId: acheteur.id,
+      nom: "Jean", // nom inchangé
+      email: "jean@nouveau.com",
+    });
+
+    expect(fichiersRenommes).toBe(1);
+    expect([...fs.fichiers]).toEqual([
+      "/b/Numerique/jean@nouveau.com/jean1.1.1.jpg",
+    ]);
+  });
+
+  it("n'essaie pas de renommer les numériques quand il n'y avait pas d'email avant", async () => {
+    // Cas particulier : l'acheteur n'avait PAS d'email avant, donc ses
+    // tirages numériques n'ont jamais pu être exportés. Ajouter l'email
+    // ne doit rien renommer (il n'y a rien à déplacer).
+    const { session } = setup();
+    const acheteur = session.ajouterAcheteur({ nom: "Paul" });
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: acheteur.id,
+    });
+    commande.ajouterTirage({
+      photoNumero: 1,
+      format: Format.NUMERIQUE,
+      quantite: 1,
+    });
+    const sessions = new InMemorySessionRepo([session]);
+    const commandes = new InMemoryCommandeRepo([commande]);
+    const fs = new FakeFileRenamer();
+    const useCase = new ModifierAcheteurUseCase(sessions, commandes, fs);
+
+    const { fichiersRenommes } = await useCase.execute({
+      sessionId: session.id,
+      acheteurId: acheteur.id,
+      nom: "Paul",
+      email: "paul@example.com",
+    });
+
+    expect(fichiersRenommes).toBe(0);
+    expect(fs.appels).toHaveLength(0);
+  });
 });

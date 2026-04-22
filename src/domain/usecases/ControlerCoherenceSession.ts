@@ -108,7 +108,8 @@ export class ControlerCoherenceSessionUseCase {
         (a) => a.id === commande.acheteurId,
       );
       if (!acheteur) continue;
-      for (const cible of commande.nomsFichiersExport(acheteur.nom)) {
+      const cibles = ciblesExportSecure(commande, acheteur);
+      for (const cible of cibles) {
         fichiersAttendus.add(joinChemin(cible.sousDossier, cible.nomFichier));
       }
     }
@@ -142,9 +143,9 @@ export class ControlerCoherenceSessionUseCase {
 
       // Exports manquants : on ignore les tirages fantômes (ils seront
       // retirés par l'action section A, pas par ré-export).
-      const ciblesExport = commande
-        .nomsFichiersExport(acheteur.nom)
-        .filter((c) => numerosSource.has(c.photoNumero));
+      const ciblesExport = ciblesExportSecure(commande, acheteur).filter(
+        (c) => numerosSource.has(c.photoNumero),
+      );
       if (ciblesExport.length === 0) continue;
 
       let manquants = 0;
@@ -220,20 +221,70 @@ export class ControlerCoherenceSessionUseCase {
   }
 
   /**
-   * Pré-scan de tous les sous-dossiers de format du `dossierExport` en
-   * UNE passe, puis on indexe par sousDossier → Set<nomFichier>. Évite
-   * de re-lister le même dossier pour chaque commande.
+   * Pré-scan des sous-dossiers de format du `dossierExport` en UNE
+   * passe, puis on indexe par sousDossier relatif → Set<nomFichier>.
+   * Pour le format Numérique, on descend dans chaque sous-dossier email
+   * (convention : `Numerique/{email}/fichier.jpg`) et on expose chacun
+   * avec sa clé nested `Numerique/{email}`. Les fichiers restés à plat
+   * dans `Numerique/` sont aussi indexés (repris ancienne convention,
+   * ou dépôt manuel).
    */
   private async scannerFichiersExport(
     dossierExport: string,
   ): Promise<Map<string, Set<string>>> {
     const index = new Map<string, Set<string>>();
     for (const format of Format.TOUS) {
-      const sousDossier = format.toDossierName();
-      const dossier = joinChemin(dossierExport, sousDossier);
-      const fichiers = await this.fileLister.listerFichiers(dossier);
-      index.set(sousDossier, new Set(fichiers));
+      const racine = format.toDossierName();
+      const dossierRacine = joinChemin(dossierExport, racine);
+      const fichiersRacine = await this.fileLister.listerFichiers(
+        dossierRacine,
+      );
+      index.set(racine, new Set(fichiersRacine));
+      if (!format.estNumerique()) continue;
+      const sousEmails = await this.fileLister.listerDossiers(dossierRacine);
+      for (const email of sousEmails) {
+        const cle = `${racine}/${email}`;
+        const fichiers = await this.fileLister.listerFichiers(
+          joinChemin(dossierRacine, email),
+        );
+        index.set(cle, new Set(fichiers));
+      }
     }
     return index;
+  }
+}
+
+/**
+ * Wrapper safe autour de `Commande.nomsFichiersExport` pour le contrôle
+ * de cohérence : si un tirage numérique existe sans email, `nomsFichiers
+ * Export` lève — mais dans le contrôle de cohérence on ne veut pas tout
+ * bloquer pour autant. On retourne [] et les tirages numériques
+ * apparaîtront simplement comme non attendus (le fichier attendu ne
+ * pouvant pas être calculé). Le user verra le problème à l'export.
+ */
+function ciblesExportSecure(
+  commande: {
+    nomsFichiersExport: (a: {
+      nom: string;
+      email?: string;
+    }) => ReadonlyArray<{
+      sousDossier: string;
+      nomFichier: string;
+      photoNumero: number;
+    }>;
+  },
+  acheteur: { nom: string; email?: { valeur: string } },
+): ReadonlyArray<{
+  sousDossier: string;
+  nomFichier: string;
+  photoNumero: number;
+}> {
+  try {
+    return commande.nomsFichiersExport({
+      nom: acheteur.nom,
+      email: acheteur.email?.valeur,
+    });
+  } catch {
+    return [];
   }
 }

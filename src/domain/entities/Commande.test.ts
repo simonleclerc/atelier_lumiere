@@ -4,6 +4,7 @@ import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
 import { Montant } from "../value-objects/Montant";
 import {
   Commande,
+  EmailAcheteurRequisPourNumerique,
   estFichierExportDeSlug,
   parserNomFichierExport,
   QuantiteNumeriqueInvalide,
@@ -244,7 +245,10 @@ describe("Commande (agrégat racine avec tirages)", () => {
         format: Format.NUMERIQUE,
         quantite: 1,
       });
-      const instructions = c.nomsFichiersExport("Martin Dupont");
+      const instructions = c.nomsFichiersExport({
+        nom: "Martin Dupont",
+        email: "martin@example.com",
+      });
       expect(instructions).toEqual([
         {
           sousDossier: "20x30",
@@ -257,7 +261,7 @@ describe("Commande (agrégat racine avec tirages)", () => {
           photoNumero: 145,
         },
         {
-          sousDossier: "Numerique",
+          sousDossier: "Numerique/martin@example.com",
           nomFichier: "martin_dupont3.7.1.jpg",
           photoNumero: 7,
         },
@@ -276,12 +280,57 @@ describe("Commande (agrégat racine avec tirages)", () => {
         format: Format._20x30,
         quantite: 1,
       });
-      const instructions = c.nomsFichiersExport("Martin");
+      const instructions = c.nomsFichiersExport({ nom: "Martin" });
       expect(instructions.map((i) => i.nomFichier)).toEqual([
         "martin1.145.1.jpg",
         "martin2.145.2.jpg",
         "martin3.145.1.jpg",
       ]);
+    });
+
+    it("normalise l'email fourni (trim + lowercase) pour le sous-dossier numérique", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 1,
+        format: Format.NUMERIQUE,
+        quantite: 1,
+      });
+      const instructions = c.nomsFichiersExport({
+        nom: "Martin",
+        email: "  Martin@Example.COM  ",
+      });
+      expect(instructions[0].sousDossier).toBe(
+        "Numerique/martin@example.com",
+      );
+    });
+
+    it("lève EmailAcheteurRequisPourNumerique si un tirage numérique est présent sans email", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 1,
+      });
+      c.ajouterTirage({
+        photoNumero: 7,
+        format: Format.NUMERIQUE,
+        quantite: 1,
+      });
+      expect(() => c.nomsFichiersExport({ nom: "Martin" })).toThrow(
+        EmailAcheteurRequisPourNumerique,
+      );
+    });
+
+    it("ne requiert pas d'email si la commande n'a pas de tirage numérique", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 1,
+      });
+      const instructions = c.nomsFichiersExport({ nom: "Martin" });
+      expect(instructions).toHaveLength(1);
+      expect(instructions[0].sousDossier).toBe("20x30");
     });
   });
 });

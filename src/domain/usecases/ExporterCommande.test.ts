@@ -39,7 +39,10 @@ function setup() {
     grilleTarifaire: grille(),
     photoNumeros: [1, 145, 300],
   });
-  const acheteur = session.ajouterAcheteur({ nom: "Martin Dupont" });
+  const acheteur = session.ajouterAcheteur({
+    nom: "Martin Dupont",
+    email: "martin@example.com",
+  });
   const commande = Commande.creer({
     sessionId: session.id,
     acheteurId: acheteur.id,
@@ -149,6 +152,23 @@ class FakeFileSystem implements FileLister, FileRemover {
     return [...(this.dossiers.get(dossier) ?? new Set())];
   }
 
+  /**
+   * Sous-dossiers directs : dérivés des clés de `dossiers` qui commencent
+   * par `dossier/` et n'ont qu'un segment supplémentaire.
+   */
+  async listerDossiers(dossier: string): Promise<readonly string[]> {
+    const prefixe = dossier.endsWith("/") ? dossier : `${dossier}/`;
+    const sous = new Set<string>();
+    for (const cle of this.dossiers.keys()) {
+      if (!cle.startsWith(prefixe)) continue;
+      const reste = cle.slice(prefixe.length);
+      if (!reste) continue;
+      const segment = reste.split("/")[0];
+      sous.add(segment);
+    }
+    return [...sous];
+  }
+
   async supprimerSiExiste(chemin: string): Promise<boolean> {
     const sep = chemin.includes("\\") ? "\\" : "/";
     const idx = chemin.lastIndexOf(sep);
@@ -204,7 +224,7 @@ describe("ExporterCommandeUseCase", () => {
       },
       {
         source: "/Users/copain/src/1.jpg",
-        destination: "/Users/copain/export/Numerique/martin_dupont4.1.1.jpg",
+        destination: "/Users/copain/export/Numerique/martin@example.com/martin_dupont4.1.1.jpg",
       },
     ]);
   });
@@ -364,6 +384,64 @@ describe("ExporterCommandeUseCase", () => {
       expect(r.orphelinsSupprimes).toBe(0);
       expect(fs.suppressions).toHaveLength(0);
     });
+
+    it("supprime les orphelins numériques dans un ancien sous-dossier email", async () => {
+      const { session, commande } = setup();
+      const { useCase, fs } = monter([commande], [session]);
+      // Simule : l'acheteur avait un ancien email et a déjà des fichiers
+      // numériques exportés dans l'ancien sous-dossier. Son email a
+      // changé depuis, donc ces fichiers sont orphelins sous leur slug.
+      fs.ajouter(
+        "/Users/copain/export/Numerique/ancien@mail.com",
+        "martin_dupont1.1.1.jpg",
+      );
+      fs.ajouter(
+        "/Users/copain/export/Numerique/ancien@mail.com",
+        "martin_dupont2.5.1.jpg",
+      );
+
+      const r = await useCase.execute({ commandeId: commande.id });
+
+      expect(r.orphelinsSupprimes).toBe(2);
+      expect([...fs.suppressions].sort()).toEqual([
+        "/Users/copain/export/Numerique/ancien@mail.com/martin_dupont1.1.1.jpg",
+        "/Users/copain/export/Numerique/ancien@mail.com/martin_dupont2.5.1.jpg",
+      ]);
+    });
+  });
+});
+
+describe("ExporterCommandeUseCase — email requis pour le numérique", () => {
+  it("lève et marque la commande en erreur si l'acheteur n'a pas d'email", async () => {
+    const session = Session.creer({
+      commanditaire: "X",
+      referent: "Y",
+      date: new Date("2026-04-01"),
+      type: "Spectacle",
+      dossierSource: new CheminDossier("/src"),
+      dossierExport: new CheminDossier("/exp"),
+      grilleTarifaire: grille(),
+      photoNumeros: [1],
+    });
+    const acheteur = session.ajouterAcheteur({ nom: "Alice" }); // pas d'email
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: acheteur.id,
+    });
+    commande.ajouterTirage({
+      photoNumero: 1,
+      format: Format.NUMERIQUE,
+      quantite: 1,
+    });
+    const { useCase, cRepo } = monter([commande], [session]);
+
+    await expect(
+      useCase.execute({ commandeId: commande.id }),
+    ).rejects.toThrow(/email/i);
+
+    const rechargee = await cRepo.findById(commande.id);
+    expect(rechargee.statut.estEnErreur()).toBe(true);
+    expect(rechargee.statut.messageErreur).toMatch(/email/i);
   });
 });
 

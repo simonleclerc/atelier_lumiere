@@ -63,10 +63,21 @@ export class ExporterCommandeUseCase {
       );
     }
 
-    const cibles = commande.nomsFichiersExport(acheteur.nom);
     const slug = slugifierNomAcheteur(acheteur.nom);
+    let cibles: ReadonlyArray<{
+      sousDossier: string;
+      nomFichier: string;
+      photoNumero: number;
+    }> = [];
     let orphelinsSupprimes = 0;
     try {
+      // Le calcul des cibles peut lever (email manquant pour un tirage
+      // numérique) — on le met dans le try/catch pour que l'erreur
+      // remonte sur le statut de la commande, pas seulement au toast.
+      cibles = commande.nomsFichiersExport({
+        nom: acheteur.nom,
+        email: acheteur.email?.valeur,
+      });
       orphelinsSupprimes = await this.nettoyerOrphelins(
         session.dossierExport.valeur,
         slug,
@@ -103,6 +114,12 @@ export class ExporterCommandeUseCase {
    * mais qui ne sont plus dans la liste des cibles actuelles. Parcourt
    * TOUS les formats (pas seulement ceux de la commande courante), car
    * un tirage peut avoir été retiré d'un format qui n'est plus utilisé.
+   *
+   * Cas particulier du format `Numerique` : les fichiers sont rangés
+   * dans des sous-dossiers par email (un par acheteur). On descend donc
+   * dans chaque sous-dossier email pour chercher les orphelins. Ça
+   * couvre aussi le cas d'un acheteur dont l'email a changé (l'ancien
+   * sous-dossier devient orphelin pour notre slug).
    */
   private async nettoyerOrphelins(
     dossierExport: string,
@@ -114,20 +131,45 @@ export class ExporterCommandeUseCase {
     );
     let supprimes = 0;
     for (const format of Format.TOUS) {
-      const sousDossier = format.toDossierName();
-      const dossier = joinChemin(dossierExport, sousDossier);
-      const fichiers = await this.fileLister.listerFichiers(dossier);
-      for (const nom of fichiers) {
-        if (!estFichierExportDeSlug(nom, slug)) continue;
-        const cle = joinChemin(sousDossier, nom);
-        if (attendus.has(cle)) continue;
-        const absolu = joinChemin(dossierExport, sousDossier, nom);
-        if (await this.fileRemover.supprimerSiExiste(absolu)) {
-          supprimes += 1;
+      const dossiersAScanner = await this.dossiersAScanner(
+        dossierExport,
+        format,
+      );
+      for (const sousDossier of dossiersAScanner) {
+        const dossier = joinChemin(dossierExport, sousDossier);
+        const fichiers = await this.fileLister.listerFichiers(dossier);
+        for (const nom of fichiers) {
+          if (!estFichierExportDeSlug(nom, slug)) continue;
+          const cle = joinChemin(sousDossier, nom);
+          if (attendus.has(cle)) continue;
+          const absolu = joinChemin(dossierExport, sousDossier, nom);
+          if (await this.fileRemover.supprimerSiExiste(absolu)) {
+            supprimes += 1;
+          }
         }
       }
     }
     return supprimes;
+  }
+
+  /**
+   * Pour un format donné, retourne les sous-dossiers relatifs à
+   * `dossierExport` à scanner à la recherche de fichiers. Pour les
+   * formats papier, il n'y a qu'un sous-dossier (`{format}`). Pour le
+   * numérique, il y a un sous-dossier par email (`Numerique/{email}`)
+   * plus éventuellement `Numerique` lui-même (au cas où il reste des
+   * fichiers à plat d'une ancienne version).
+   */
+  private async dossiersAScanner(
+    dossierExport: string,
+    format: Format,
+  ): Promise<readonly string[]> {
+    const racine = format.toDossierName();
+    if (!format.estNumerique()) return [racine];
+    const sousEmails = await this.fileLister.listerDossiers(
+      joinChemin(dossierExport, racine),
+    );
+    return [racine, ...sousEmails.map((email) => `${racine}/${email}`)];
   }
 }
 

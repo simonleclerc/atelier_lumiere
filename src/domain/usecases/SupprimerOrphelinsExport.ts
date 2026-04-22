@@ -66,7 +66,18 @@ export class SupprimerOrphelinsExportUseCase {
     for (const c of commandes) {
       const acheteur = session.acheteurs.find((a) => a.id === c.acheteurId);
       if (!acheteur) continue;
-      for (const cible of c.nomsFichiersExport(acheteur.nom)) {
+      let cibles: ReadonlyArray<{ sousDossier: string; nomFichier: string }>;
+      try {
+        cibles = c.nomsFichiersExport({
+          nom: acheteur.nom,
+          email: acheteur.email?.valeur,
+        });
+      } catch {
+        // Email manquant pour un tirage numérique : aucune cible
+        // calculable, on laisse l'ensemble vide pour cette commande.
+        cibles = [];
+      }
+      for (const cible of cibles) {
         attendus.add(
           joinChemin(dossierExport, cible.sousDossier, cible.nomFichier),
         );

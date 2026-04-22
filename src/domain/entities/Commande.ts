@@ -50,6 +50,25 @@ export class QuantiteNumeriqueInvalide extends Error {
   }
 }
 
+/**
+ * Règle métier à l'export : les tirages numériques sont livrés par
+ * email (un sous-dossier par acheteur dans `Numerique/`), donc un
+ * acheteur sans email ne peut pas voir ses numériques exportés. La
+ * validation vit dans `Commande.nomsFichiersExport` parce qu'elle
+ * dépend de la convention de nommage/rangement côté export, pas d'un
+ * invariant intrinsèque à la Commande (ajouter un tirage numérique à
+ * un acheteur sans email reste autorisé — l'utilisateur peut
+ * compléter l'email avant d'exporter).
+ */
+export class EmailAcheteurRequisPourNumerique extends Error {
+  constructor(nomAcheteur: string) {
+    super(
+      `L'acheteur "${nomAcheteur}" doit avoir un email pour exporter ses tirages numériques : ils sont rangés dans un sous-dossier portant son email.`,
+    );
+    this.name = "EmailAcheteurRequisPourNumerique";
+  }
+}
+
 export interface CommandeDonnees {
   readonly id: string;
   readonly sessionId: string;
@@ -232,15 +251,26 @@ export class Commande {
    *    qui repart à 1 dans chaque tirage même si la photoNumero est la
    *    même (cas d'une photo commandée dans deux formats différents).
    *
+   * Cas particulier du format **numérique** : `sousDossier` vaut
+   * `Numerique/{email}` plutôt que `Numerique` — les fichiers digitaux
+   * sont rangés par acheteur pour simplifier la livraison (envoi email
+   * individuel). Si l'acheteur n'a pas d'email, la méthode lève
+   * `EmailAcheteurRequisPourNumerique` — l'utilisateur doit compléter
+   * l'email avant de pouvoir exporter.
+   *
    * Méthode PURE — le use case ExporterCommande orchestre les copies
    * réelles à partir de ces instructions.
    */
-  nomsFichiersExport(nomAcheteur: string): ReadonlyArray<{
+  nomsFichiersExport(acheteur: {
+    readonly nom: string;
+    readonly email?: string;
+  }): ReadonlyArray<{
     readonly sousDossier: string;
     readonly nomFichier: string;
     readonly photoNumero: number;
   }> {
-    const slug = slugifierNomAcheteur(nomAcheteur);
+    const slug = slugifierNomAcheteur(acheteur.nom);
+    const emailNormalise = acheteur.email?.trim().toLowerCase();
     const instructions: Array<{
       sousDossier: string;
       nomFichier: string;
@@ -248,7 +278,11 @@ export class Commande {
     }> = [];
     let indexGlobal = 0;
     for (const tirage of this._tirages) {
-      const sousDossier = tirage.format.toDossierName();
+      const sousDossier = sousDossierPourTirage(
+        tirage.format,
+        emailNormalise,
+        acheteur.nom,
+      );
       for (let i = 0; i < tirage.quantite; i += 1) {
         indexGlobal += 1;
         instructions.push({
@@ -260,6 +294,19 @@ export class Commande {
     }
     return instructions;
   }
+}
+
+function sousDossierPourTirage(
+  format: Format,
+  emailNormalise: string | undefined,
+  nomAcheteur: string,
+): string {
+  const base = format.toDossierName();
+  if (!format.estNumerique()) return base;
+  if (!emailNormalise) {
+    throw new EmailAcheteurRequisPourNumerique(nomAcheteur);
+  }
+  return `${base}/${emailNormalise}`;
 }
 
 /**
