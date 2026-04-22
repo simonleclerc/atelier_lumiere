@@ -105,6 +105,9 @@ class FakeFileRemover implements FileRemover {
     this.suppressions.push(chemin);
     return true;
   }
+  async supprimerDossierSiVide(): Promise<boolean> {
+    return false; // pas utilisé par SupprimerOrphelinsExport
+  }
 }
 
 function sessionBase(): Session {

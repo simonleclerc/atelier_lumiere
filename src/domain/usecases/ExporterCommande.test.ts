@@ -183,6 +183,9 @@ class FakeFileSystem implements FileLister, FileRemover {
     this.suppressions.push(chemin);
     return true;
   }
+  async supprimerDossierSiVide(): Promise<boolean> {
+    return false; // pas utilisé par ExporterCommande
+  }
 }
 
 function monter(

@@ -68,6 +68,7 @@ export class SupprimerSessionUseCase {
       session.dossierExport.valeur,
       slugs,
     );
+    await this.nettoyerDossiersVides(session.dossierExport.valeur);
 
     for (const c of commandes) {
       await this.commandeRepository.delete(c.id);
@@ -75,6 +76,33 @@ export class SupprimerSessionUseCase {
     await this.sessionRepository.delete(entree.sessionId);
 
     return { fichiersSupprimes, commandesSupprimees: commandes.length };
+  }
+
+  /**
+   * Tente de supprimer les sous-dossiers laissés vides par le nettoyage
+   * de fichiers. Best-effort : `supprimerDossierSiVide` retourne false
+   * et n'échoue pas si un dossier contient encore des fichiers (autre
+   * session sur le même dossierExport, par exemple).
+   *
+   * Ordre : on commence par les sous-dossiers email du Numérique, puis
+   * les racines de format. Une racine ne peut être vide qu'après ses
+   * enfants. Le `dossierExport` lui-même n'est jamais touché (il
+   * appartient à l'utilisateur, pas à la session).
+   */
+  private async nettoyerDossiersVides(dossierExport: string): Promise<void> {
+    for (const format of Format.TOUS) {
+      const racine = format.toDossierName();
+      const dossierRacine = joinChemin(dossierExport, racine);
+      if (format.estNumerique()) {
+        const sousEmails = await this.fileLister.listerDossiers(dossierRacine);
+        for (const email of sousEmails) {
+          await this.fileRemover.supprimerDossierSiVide(
+            joinChemin(dossierRacine, email),
+          );
+        }
+      }
+      await this.fileRemover.supprimerDossierSiVide(dossierRacine);
+    }
   }
 
   /**

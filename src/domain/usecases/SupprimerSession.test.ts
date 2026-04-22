@@ -94,6 +94,7 @@ class InMemoryCommandeRepo implements CommandeRepository {
 class FakeFileSystem implements FileLister, FileRemover {
   readonly dossiers = new Map<string, Set<string>>();
   readonly suppressions: string[] = [];
+  readonly dossiersSupprimes: string[] = [];
 
   ajouter(dossier: string, nomFichier: string): void {
     if (!this.dossiers.has(dossier)) this.dossiers.set(dossier, new Set());
@@ -122,6 +123,28 @@ class FakeFileSystem implements FileLister, FileRemover {
     if (!set?.has(nom)) return false;
     set.delete(nom);
     this.suppressions.push(chemin);
+    return true;
+  }
+  async supprimerDossierSiVide(chemin: string): Promise<boolean> {
+    const prefixe = chemin.endsWith("/") ? chemin : `${chemin}/`;
+    const direct = this.dossiers.get(chemin);
+    let exists = direct !== undefined;
+    let hasContent = !!(direct && direct.size > 0);
+    for (const cle of this.dossiers.keys()) {
+      if (cle === chemin || !cle.startsWith(prefixe)) continue;
+      exists = true;
+      const set = this.dossiers.get(cle);
+      if ((set && set.size > 0) || !set) {
+        hasContent = true;
+        break;
+      }
+      // descendant existant mais vide compte aussi comme contenu (sous-dossier)
+      hasContent = true;
+      break;
+    }
+    if (!exists || hasContent) return false;
+    this.dossiers.delete(chemin);
+    this.dossiersSupprimes.push(chemin);
     return true;
   }
 }
@@ -285,5 +308,74 @@ describe("SupprimerSessionUseCase", () => {
     await expect(
       useCase.execute({ sessionId: "inconnu" }),
     ).rejects.toBeInstanceOf(SessionIntrouvable);
+  });
+
+  it("supprime les sous-dossiers email vides après nettoyage des fichiers numériques", async () => {
+    const { session, acheteurId } = sessionAvecMartin();
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId,
+    });
+    commande.ajouterTirage({
+      photoNumero: 1,
+      format: Format.NUMERIQUE,
+      quantite: 1,
+    });
+    const fs = new FakeFileSystem();
+    fs.ajouter("/exp/Numerique/martin@example.com", "martin1.1.1.jpg");
+
+    const useCase = new SupprimerSessionUseCase(
+      new InMemorySessionRepo([session]),
+      new InMemoryCommandeRepo([commande]),
+      fs,
+      fs,
+    );
+
+    await useCase.execute({ sessionId: session.id });
+
+    expect(fs.dossiersSupprimes).toContain(
+      "/exp/Numerique/martin@example.com",
+    );
+    expect(fs.dossiers.has("/exp/Numerique/martin@example.com")).toBe(false);
+  });
+
+  it("ne supprime pas un sous-dossier email partagé avec d'autres fichiers", async () => {
+    const { session, acheteurId } = sessionAvecMartin();
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId,
+    });
+    commande.ajouterTirage({
+      photoNumero: 1,
+      format: Format.NUMERIQUE,
+      quantite: 1,
+    });
+    const fs = new FakeFileSystem();
+    // Le fichier numérique de Martin et un fichier d'un autre acheteur
+    // partageant le MÊME email (cas familles, plusieurs membres) — le
+    // sous-dossier ne doit PAS être supprimé tant qu'il reste du contenu.
+    fs.ajouter("/exp/Numerique/martin@example.com", "martin1.1.1.jpg");
+    fs.ajouter(
+      "/exp/Numerique/martin@example.com",
+      "autre_acheteur1.5.1.jpg",
+    );
+
+    const useCase = new SupprimerSessionUseCase(
+      new InMemorySessionRepo([session]),
+      new InMemoryCommandeRepo([commande]),
+      fs,
+      fs,
+    );
+
+    await useCase.execute({ sessionId: session.id });
+
+    expect(fs.dossiersSupprimes).not.toContain(
+      "/exp/Numerique/martin@example.com",
+    );
+    expect(
+      fs.dossiers.get("/exp/Numerique/martin@example.com")?.has(
+        "autre_acheteur1.5.1.jpg",
+      ),
+    ).toBe(true);
   });
 });
