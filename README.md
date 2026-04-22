@@ -2,8 +2,8 @@
 
 Application de bureau pour gérer les ventes de tirages photo à l'issue d'un spectacle ou d'un événement. Le photographe y inscrit ses acheteurs, enregistre les commandes (formats papier et fichiers numériques) et exporte automatiquement les fichiers vers le dossier de l'imprimeur, avec un nommage prêt pour la production.
 
-- **Plateformes** : macOS (installeur `.dmg`, universel Intel + Apple Silicon) et Windows (installeur `.msi`).
-- **Interface** : 100 % française.
+- **Plateformes** : macOS (installeur `.dmg`, universel Intel + Apple Silicon) et Windows (installeur `.msi` ou `.exe`).
+- **Interface** : 100 % française, thème sombre.
 - **Données** : stockées localement sur la machine, sauvegardables en un fichier JSON.
 
 ---
@@ -19,10 +19,13 @@ Application de bureau pour gérer les ventes de tirages photo à l'issue d'un sp
    - [Grille tarifaire](#grille-tarifaire)
    - [Acheteurs](#acheteurs)
    - [Commandes et tirages](#commandes-et-tirages)
+   - [Le format numérique en détail](#le-format-numérique-en-détail)
    - [Exporter vers l'imprimeur](#exporter-vers-limprimeur)
    - [Statuts d'export](#statuts-dexport)
    - [Rescanner les photos](#rescanner-les-photos)
    - [Contrôler la cohérence](#contrôler-la-cohérence)
+   - [Archiver une session](#archiver-une-session)
+   - [Supprimer une session](#supprimer-une-session)
    - [Sauvegarder et restaurer](#sauvegarder-et-restaurer)
 4. [Convention de nommage des fichiers exportés](#convention-de-nommage-des-fichiers-exportés)
 5. [Limites connues et FAQ](#limites-connues-et-faq)
@@ -55,7 +58,7 @@ L'application n'est pas encore signée auprès d'Apple ni de Microsoft. Au premi
 3. **Lancez l'application** et cliquez sur **Nouvelle session**. Remplissez les informations, choisissez les deux dossiers, validez.
 4. **Ouvrez la session** en cliquant dessus dans la liste, et commencez à inscrire vos acheteurs.
 
-Le dossier source n'est **jamais modifié** par l'application. Vos originaux sont en sécurité.
+Le dossier source n'est **jamais modifié** par l'application. Vos originaux sont en sécurité, en toute circonstance.
 
 ---
 
@@ -63,13 +66,18 @@ Le dossier source n'est **jamais modifié** par l'application. Vos originaux son
 
 ### Liste des sessions
 
-L'écran d'accueil liste toutes les sessions créées, de la plus récente à la plus ancienne. Trois boutons en entête :
+L'écran d'accueil regroupe les sessions en deux sections :
+
+- **Actives** — les sessions en cours, modifiables.
+- **Archivées** — les sessions gelées dont les fichiers d'export ont été nettoyés mais dont les données sont conservées (voir [Archiver une session](#archiver-une-session)). Cette section n'apparaît pas tant qu'aucune session n'a été archivée.
+
+Trois boutons en entête :
 
 - **Nouvelle session** : ouvre le formulaire de création.
 - **Sauvegarder** : enregistre toutes vos données (sessions + commandes) dans un fichier JSON, à l'emplacement de votre choix. Utile pour archiver, transférer sur une autre machine ou faire un point de restauration avant une grosse modification.
 - **Importer** : restaure les données depuis un fichier JSON créé par **Sauvegarder**. ⚠️ Attention : cette opération **remplace toutes les données actuelles** de l'application. Une confirmation est demandée.
 
-Un clic sur une session dans la liste ouvre sa fiche détaillée.
+Un clic sur une session ouvre sa fiche détaillée.
 
 ### Créer ou modifier une session
 
@@ -91,6 +99,8 @@ En haut de la fiche, à côté du nom du commanditaire :
 - **Rescanner les photos** : relit le dossier source pour mettre à jour la liste des photos disponibles.
 - **Contrôler la cohérence** : ouvre un outil de diagnostic (voir plus bas).
 - **Modifier** : rouvre le formulaire de session pour changer une information (nom, dossiers, date…).
+- **Archiver** : nettoie les fichiers d'export et bascule la session en lecture seule (voir [Archiver une session](#archiver-une-session)).
+- **Supprimer** : suppression définitive de la session, des commandes et des fichiers d'export (voir [Supprimer une session](#supprimer-une-session)).
 
 La fiche est découpée en plusieurs sections : grille tarifaire, liste des acheteurs, récapitulatif.
 
@@ -118,8 +128,10 @@ Pour chaque format, saisissez le prix en euros et cliquez sur **Enregistrer**. L
 
 Chaque acheteur est présenté dans une carte avec ses coordonnées, son statut d'export, le total de sa commande et ses tirages. Deux boutons par carte :
 
-- **Modifier** : rouvre le formulaire de l'acheteur. Si vous changez le nom et que des fichiers ont déjà été exportés, une fenêtre de confirmation propose de **renommer automatiquement** les fichiers existants pour qu'ils correspondent au nouveau nom. Aucune donnée n'est supprimée.
+- **Modifier** : rouvre le formulaire de l'acheteur. Si vous changez le nom et que des fichiers ont déjà été exportés, une fenêtre de confirmation propose de **renommer automatiquement** les fichiers existants pour qu'ils correspondent au nouveau nom. Aucune donnée n'est supprimée. Idem si vous modifiez l'email d'un acheteur qui a des tirages numériques exportés : les fichiers migrent vers le nouveau sous-dossier email.
 - **Ajouter des photos** : ouvre le formulaire de saisie d'une commande.
+
+Si une commande contient un tirage numérique mais que l'acheteur n'a pas d'email, un **bandeau d'avertissement** apparaît dans sa carte. Dès que vous renseignez l'email, l'export numérique est lancé automatiquement pour rattraper les fichiers qui n'avaient pas pu être créés.
 
 ### Commandes et tirages
 
@@ -134,21 +146,27 @@ Le formulaire **Ajouter des photos** propose :
 
 Si plusieurs photos sont sélectionnées et qu'une quantité de 2 est indiquée, l'application crée un tirage par photo, chacun en 2 exemplaires.
 
-**Règle pour le format numérique** : un fichier digital est livré en **1 exemplaire maximum par photo**. Le champ quantité est automatiquement verrouillé à 1 dès que vous choisissez le format numérique. Plusieurs photos en numérique dans la même commande restent possibles (chacune en 1 exemplaire).
-
 Dans la liste des tirages d'une commande, chaque ligne peut être retirée individuellement via le bouton **Retirer** (avec confirmation). Si c'était le dernier tirage de la commande, la commande est supprimée automatiquement.
+
+### Le format numérique en détail
+
+Les tirages au format **Numérique** suivent quelques règles spécifiques :
+
+- **1 exemplaire maximum par photo.** Le champ **Quantité** est verrouillé à 1 dès que vous choisissez le format numérique. Plusieurs photos en numérique dans la même commande restent possibles, mais chacune en un seul exemplaire.
+- **L'email de l'acheteur est obligatoire pour exporter.** Les fichiers numériques sont rangés dans `Numerique/{email}/` à l'intérieur du dossier d'export, ce qui permet de les retrouver acheteur par acheteur pour les transmettre. Si l'email manque, l'export du numérique échoue avec un message clair, et un bandeau d'avertissement apparaît sur la carte de l'acheteur. Renseigner l'email déclenche automatiquement l'export du numérique pour rattraper les fichiers manquants.
+- **Changement d'email pris en charge.** Si l'email d'un acheteur change après un export numérique, les fichiers sont déplacés automatiquement vers le nouveau sous-dossier (le bouton **Modifier** sur l'acheteur s'en occupe).
 
 ### Exporter vers l'imprimeur
 
 Deux boutons selon le périmètre :
 
 - **Exporter** (dans la carte d'un acheteur) : exporte uniquement la commande de cet acheteur.
-- **Exporter toute la session (N)** (dans le récapitulatif en bas de la fiche) : exporte toutes les commandes d'un coup. Une confirmation est demandée au-delà de 3 acheteurs. Si certaines commandes échouent (photo source manquante, par exemple), les autres continuent d'être exportées, et un rapport détaillé est affiché.
+- **Exporter toute la session (N)** (dans le récapitulatif en bas de la fiche) : exporte toutes les commandes d'un coup. Une confirmation est demandée au-delà de 3 acheteurs. Si certaines commandes échouent (photo source manquante, email manquant pour un numérique…), les autres continuent d'être exportées, et un rapport détaillé est affiché.
 
 À chaque export, l'application :
 
-1. **Copie** les photos originales du dossier source vers `{dossier_export}/{format}/` en les renommant selon la convention (voir plus bas).
-2. **Nettoie les orphelins** : si la commande a changé depuis le dernier export (tirage retiré, format changé…), les anciens fichiers devenus inutiles sont supprimés pour que le contenu du dossier d'export reflète exactement l'état actuel de la commande.
+1. **Copie** les photos originales du dossier source vers `{dossier_export}/{format}/` en les renommant selon la convention (voir plus bas). Les tirages numériques vont dans `{dossier_export}/Numerique/{email-acheteur}/`.
+2. **Nettoie les orphelins** : si la commande a changé depuis le dernier export (tirage retiré, format changé, email changé…), les anciens fichiers devenus inutiles sont supprimés pour que le contenu du dossier d'export reflète exactement l'état actuel de la commande.
 
 Un toast (notification en haut à droite) confirme le nombre de fichiers créés et, le cas échéant, le nombre d'orphelins supprimés.
 
@@ -182,36 +200,64 @@ Liste les commandes dont un ou plusieurs fichiers attendus dans le dossier d'exp
 **3. Fichiers orphelins dans l'export**
 Liste les fichiers présents dans le dossier d'export qui ne correspondent plus à aucun tirage courant : restes de commandes d'acheteurs supprimés, tirages retirés, ou fichiers portant un ancien nom après un renommage. Cochez ceux que vous voulez supprimer (tous sont cochés par défaut) puis cliquez sur **Supprimer N fichier(s)**. Les fichiers encore attendus par une commande ne seront jamais supprimés, même si la case est cochée : l'application revérifie juste avant la suppression.
 
+### Archiver une session
+
+Une fois la saison terminée, une session peut être **archivée** pour libérer de l'espace disque tout en gardant la trace de ce qui a été vendu :
+
+- Cliquez sur **Archiver** dans le header de la fiche session.
+- Une fenêtre de confirmation rappelle ce qui va être nettoyé. Validez.
+- L'application supprime tous les fichiers d'export que cette session a créés (papier et numérique, sous-dossiers email compris) et les sous-dossiers laissés vides. **Le dossier source n'est pas touché.**
+- La session bascule en **lecture seule** : les commandes, les acheteurs, la grille tarifaire et tous les statuts restent visibles, mais aucun bouton de modification n'est plus accessible. Un bandeau d'information rappelle l'état d'archivage.
+- Dans la liste des sessions, l'archive bascule de la section « Actives » vers la section « Archivées ».
+
+Pour rendre la session de nouveau modifiable, ouvrez-la et cliquez sur **Désarchiver**. Les fichiers d'export ne sont **pas restaurés** automatiquement (impossible : ils ont été supprimés). Si vous en avez besoin, ré-exportez les commandes manuellement.
+
+### Supprimer une session
+
+Cliquez sur **Supprimer** dans le header. Une fenêtre de confirmation rappelle ce qui va être détruit :
+
+- la session elle-même ;
+- toutes ses commandes ;
+- tous les fichiers d'export que cette session a créés (y compris les sous-dossiers email du Numérique).
+
+Le dossier source n'est jamais touché. **L'opération est irréversible.** Si vous voulez seulement libérer de l'espace tout en gardant les données, préférez **Archiver**.
+
 ### Sauvegarder et restaurer
 
 Depuis la liste des sessions :
 
-- **Sauvegarder** produit un fichier JSON versionné contenant **toutes** les sessions et commandes. Les photos ne sont **pas** incluses (ce sont vos fichiers originaux, ils restent où ils sont).
+- **Sauvegarder** produit un fichier JSON versionné contenant **toutes** les sessions (y compris les archivées) et toutes les commandes. Les photos ne sont **pas** incluses (ce sont vos fichiers originaux, ils restent où ils sont).
 - **Importer** lit un fichier JSON et **remplace** entièrement les données actuelles. Une confirmation est demandée.
 
 Usages typiques :
 
 - Avant une grosse modification, faire une sauvegarde pour pouvoir revenir en arrière.
 - Transférer les données d'une session sur une autre machine.
-- Archiver une saison terminée.
+- Conserver une copie de sécurité hors du dossier applicatif.
 
 ---
 
 ## Convention de nommage des fichiers exportés
 
-Chaque fichier exporté suit le format :
+Pour les tirages **papier** (15×23, 20×30, 30×45), chaque fichier exporté suit le format :
 
 ```
 {dossier_export}/{format}/{slug-acheteur}{indexGlobal}.{numéro-photo}.{exemplaire}.jpg
 ```
 
-Par exemple, pour Martin Dupont qui commande 3 exemplaires en 20×30 de la photo 145 puis 1 fichier numérique de la photo 1 :
+Pour les tirages **numériques**, un sous-dossier intermédiaire correspondant à l'email de l'acheteur est inséré, ce qui permet de retrouver et transmettre facilement les fichiers de chacun :
+
+```
+{dossier_export}/Numerique/{email}/{slug-acheteur}{indexGlobal}.{numéro-photo}.{exemplaire}.jpg
+```
+
+Exemple complet : Martin Dupont (`martin@example.com`) commande 3 exemplaires en 20×30 de la photo 145 puis 1 fichier numérique de la photo 1 :
 
 ```
 {dossier_export}/20x30/martin_dupont1.145.1.jpg
 {dossier_export}/20x30/martin_dupont2.145.2.jpg
 {dossier_export}/20x30/martin_dupont3.145.3.jpg
-{dossier_export}/Numerique/martin_dupont4.1.1.jpg
+{dossier_export}/Numerique/martin@example.com/martin_dupont4.1.1.jpg
 ```
 
 Signification des trois segments numériques :
@@ -234,7 +280,11 @@ Si deux acheteurs d'une même session risquent de produire le même slug, le for
 
 **Un fichier numérique = un seul exemplaire par photo.** L'interface l'enforce automatiquement. Si un acheteur veut deux versions différentes du même fichier, choisissez un format papier.
 
+**L'export du numérique échoue tant qu'il n'y a pas d'email.** C'est volontaire : sans email, on ne sait pas où ranger le fichier (le sous-dossier de livraison est nommé d'après l'email). Renseignez l'email et l'export sera relancé automatiquement.
+
 **Où sont stockées les données ?** L'application utilise le dossier applicatif système (`~/Library/Application Support/com.atelierlumiere.app` sur macOS, `%APPDATA%\com.atelierlumiere.app` sur Windows). Pour garder une trace hors de ce dossier, utilisez **Sauvegarder** régulièrement.
+
+**Différence entre Archiver et Supprimer ?** Archiver garde toutes les données (commandes, acheteurs, statistiques, statuts) et nettoie uniquement les fichiers d'export du disque pour libérer de l'espace ; la session redevient modifiable après désarchivage. Supprimer détruit définitivement la session, ses commandes et ses fichiers d'export — irréversible.
 
 **Puis-je utiliser un dossier réseau / NAS pour l'export ?** Oui, tant que le système le voit comme un dossier local. Les performances dépendent du réseau.
 
