@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { TriangleAlertIcon } from "lucide-react";
 import { Button } from "@/ui/components/ui/button";
 import {
   Dialog,
@@ -491,18 +492,57 @@ export function SessionDetailPage({
                       });
                       if (!ok) return;
                     }
+                    const ancienEmail = a.email?.valeur;
+                    const cmdAcheteur = commandeParAcheteur.get(a.id);
                     const { acheteur: modifie, fichiersRenommes } =
                       await modifierAcheteur.execute({
                         sessionId: session.id,
                         acheteurId: a.id,
                         ...valeurs,
                       });
-                    toast.success("Acheteur mis à jour", {
-                      description:
-                        fichiersRenommes > 0
-                          ? `${modifie.nom} · ${fichiersRenommes} fichier${fichiersRenommes > 1 ? "s" : ""} renommé${fichiersRenommes > 1 ? "s" : ""}`
-                          : modifie.nom,
-                    });
+
+                    // Rattrapage : si l'email vient d'être ajouté (vide
+                    // → rempli) et que la commande contient au moins un
+                    // tirage numérique, on déclenche l'export
+                    // automatiquement pour livrer les fichiers digitaux
+                    // qui n'avaient jamais pu être créés faute d'email.
+                    const emailVientDEtreAjoute =
+                      !ancienEmail && !!modifie.email?.valeur;
+                    const aDuNumerique = !!cmdAcheteur?.tirages.some((t) =>
+                      t.format.estNumerique(),
+                    );
+                    if (
+                      emailVientDEtreAjoute &&
+                      aDuNumerique &&
+                      cmdAcheteur
+                    ) {
+                      try {
+                        const r = await exporterCommande.execute({
+                          commandeId: cmdAcheteur.id,
+                        });
+                        toast.success(
+                          `Acheteur mis à jour · ${r.fichiersCrees} fichier${r.fichiersCrees > 1 ? "s" : ""} numérique${r.fichiersCrees > 1 ? "s" : ""} exporté${r.fichiersCrees > 1 ? "s" : ""}`,
+                          { description: modifie.nom },
+                        );
+                      } catch (err) {
+                        toast.warning(
+                          "Acheteur mis à jour, mais l'export numérique automatique a échoué",
+                          {
+                            description:
+                              err instanceof Error
+                                ? err.message
+                                : String(err),
+                          },
+                        );
+                      }
+                    } else {
+                      toast.success("Acheteur mis à jour", {
+                        description:
+                          fichiersRenommes > 0
+                            ? `${modifie.nom} · ${fichiersRenommes} fichier${fichiersRenommes > 1 ? "s" : ""} renommé${fichiersRenommes > 1 ? "s" : ""}`
+                            : modifie.nom,
+                      });
+                    }
                     setAcheteurEnEdition(null);
                     recharger();
                   } catch (err) {
@@ -921,6 +961,10 @@ function AcheteurCard({
   const nombreTirages = commande?.nombreTirages() ?? 0;
   const total = commande?.total(session.grilleTarifaire) ?? new Montant(0);
 
+  const aDuNumeriqueSansEmail =
+    !acheteur.email &&
+    !!commande?.tirages.some((t) => t.format.estNumerique());
+
   async function exporter(): Promise<void> {
     if (!commande) return;
     setExportEnCours(true);
@@ -965,6 +1009,13 @@ function AcheteurCard({
           {commande?.statut.estEnErreur() && commande.statut.messageErreur && (
             <p className="text-xs text-destructive">
               {commande.statut.messageErreur}
+            </p>
+          )}
+          {aDuNumeriqueSansEmail && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-500">
+              <TriangleAlertIcon className="size-3.5" />
+              Email requis pour livrer le numérique. L'export sera lancé
+              automatiquement dès que l'email sera renseigné.
             </p>
           )}
         </div>
