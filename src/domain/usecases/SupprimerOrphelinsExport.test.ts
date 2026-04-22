@@ -44,6 +44,9 @@ class InMemorySessionRepo implements SessionRepository {
   async findAll(): Promise<readonly Session[]> {
     return Array.from(this.map.values());
   }
+  async delete(id: string): Promise<void> {
+    this.map.delete(id);
+  }
   async replaceAll(sessions: readonly Session[]): Promise<void> {
     this.map.clear();
     sessions.forEach((s) => this.map.set(s.id, s));

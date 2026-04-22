@@ -24,6 +24,12 @@ export interface SessionRepository {
   findById(id: string): Promise<Session>;
   findAll(): Promise<readonly Session[]>;
   /**
+   * Supprime la session de manière idempotente : ne lève pas si l'id
+   * n'existe pas. Le nettoyage des données liées (commandes, fichiers
+   * d'export) est de la responsabilité du use case appelant.
+   */
+  delete(id: string): Promise<void>;
+  /**
    * Remplace TOUTES les sessions stockées par celles passées en argument.
    * Utilisé exclusivement par `ImporterSauvegarde`. Implémentation
    * atomique côté infra (écrire tout en une fois, pas un delete puis

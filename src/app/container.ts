@@ -15,6 +15,7 @@ import { RescannerDossierSourceUseCase } from "@/domain/usecases/RescannerDossie
 import { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import { SupprimerCommandeUseCase } from "@/domain/usecases/SupprimerCommande";
 import { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
+import { SupprimerSessionUseCase } from "@/domain/usecases/SupprimerSession";
 import { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import { InMemoryGrilleTarifaireParDefautProvider } from "@/infrastructure/inMemory/InMemoryGrilleTarifaireParDefautProvider";
 import { TauriCommandeRepository } from "@/infrastructure/tauri/TauriCommandeRepository";
@@ -101,6 +102,12 @@ export const container = {
   supprimerOrphelinsExport: new SupprimerOrphelinsExportUseCase(
     sessionRepository,
     commandeRepository,
+    fileRemover,
+  ),
+  supprimerSession: new SupprimerSessionUseCase(
+    sessionRepository,
+    commandeRepository,
+    fileLister,
     fileRemover,
   ),
 

@@ -26,6 +26,10 @@ class InMemorySessionRepository implements SessionRepository {
   async findAll(): Promise<readonly Session[]> {
     return this.saved;
   }
+  async delete(id: string): Promise<void> {
+    const i = this.saved.findIndex((s) => s.id === id);
+    if (i !== -1) this.saved.splice(i, 1);
+  }
   async replaceAll(sessions: readonly Session[]): Promise<void> {
     this.saved.length = 0;
     this.saved.push(...sessions);

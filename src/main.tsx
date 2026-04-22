@@ -22,6 +22,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       controlerCoherenceSession={container.controlerCoherenceSession}
       rescannerDossierSource={container.rescannerDossierSource}
       supprimerOrphelinsExport={container.supprimerOrphelinsExport}
+      supprimerSession={container.supprimerSession}
       exporterSauvegarde={container.exporterSauvegarde}
       importerSauvegarde={container.importerSauvegarde}
       dossierPicker={container.dossierPicker}

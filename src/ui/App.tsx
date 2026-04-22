@@ -18,6 +18,7 @@ import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import type { ImporterSauvegardeUseCase } from "@/domain/usecases/ImporterSauvegarde";
 import type { RescannerDossierSourceUseCase } from "@/domain/usecases/RescannerDossierSource";
 import type { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
+import type { SupprimerSessionUseCase } from "@/domain/usecases/SupprimerSession";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 import type { SauvegardeFichierPicker } from "@/ui/ports/SauvegardeFichierPicker";
 import { Toaster } from "@/ui/components/ui/sonner";
@@ -38,6 +39,7 @@ interface AppProps {
   controlerCoherenceSession: ControlerCoherenceSessionUseCase;
   rescannerDossierSource: RescannerDossierSourceUseCase;
   supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
+  supprimerSession: SupprimerSessionUseCase;
   exporterSauvegarde: ExporterSauvegardeUseCase;
   importerSauvegarde: ImporterSauvegardeUseCase;
   dossierPicker: DossierPicker;
@@ -62,6 +64,7 @@ function App({
   controlerCoherenceSession,
   rescannerDossierSource,
   supprimerOrphelinsExport,
+  supprimerSession,
   exporterSauvegarde,
   importerSauvegarde,
   dossierPicker,
@@ -100,6 +103,7 @@ function App({
             controlerCoherenceSession={controlerCoherenceSession}
             rescannerDossierSource={rescannerDossierSource}
             supprimerOrphelinsExport={supprimerOrphelinsExport}
+            supprimerSession={supprimerSession}
             dossierPicker={dossierPicker}
             onRetour={() => setVue({ nom: "liste" })}
           />

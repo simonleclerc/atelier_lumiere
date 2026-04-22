@@ -35,6 +35,7 @@ import type { ModifierPrixSessionUseCase } from "@/domain/usecases/ModifierPrixS
 import type { RescannerDossierSourceUseCase } from "@/domain/usecases/RescannerDossierSource";
 import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
 import type { SupprimerOrphelinsExportUseCase } from "@/domain/usecases/SupprimerOrphelinsExport";
+import type { SupprimerSessionUseCase } from "@/domain/usecases/SupprimerSession";
 import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessionParId";
 import type { DossierPicker } from "@/ui/ports/DossierPicker";
 
@@ -53,6 +54,7 @@ interface Props {
   controlerCoherenceSession: ControlerCoherenceSessionUseCase;
   rescannerDossierSource: RescannerDossierSourceUseCase;
   supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
+  supprimerSession: SupprimerSessionUseCase;
   dossierPicker: DossierPicker;
   onRetour: () => void;
 }
@@ -81,6 +83,7 @@ export function SessionDetailPage({
   controlerCoherenceSession,
   rescannerDossierSource,
   supprimerOrphelinsExport,
+  supprimerSession,
   dossierPicker,
   onRetour,
 }: Props) {
@@ -106,6 +109,9 @@ export function SessionDetailPage({
     new Set(),
   );
   const [rescanEnCours, setRescanEnCours] = useState(false);
+  const [confirmationSuppressionOuverte, setConfirmationSuppressionOuverte] =
+    useState(false);
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
 
   const recharger = useCallback(async () => {
     setChargement(true);
@@ -218,6 +224,35 @@ export function SessionDetailPage({
         />
       </section>
     );
+  }
+
+  async function supprimerSessionCourante(): Promise<void> {
+    setSuppressionEnCours(true);
+    try {
+      const r = await supprimerSession.execute({ sessionId });
+      const morceaux: string[] = [];
+      if (r.commandesSupprimees > 0) {
+        morceaux.push(
+          `${r.commandesSupprimees} commande${r.commandesSupprimees > 1 ? "s" : ""}`,
+        );
+      }
+      if (r.fichiersSupprimes > 0) {
+        morceaux.push(
+          `${r.fichiersSupprimes} fichier${r.fichiersSupprimes > 1 ? "s" : ""}`,
+        );
+      }
+      const description =
+        morceaux.length > 0 ? morceaux.join(" · ") : "Aucune donnée associée";
+      toast.success("Session supprimée", { description });
+      setConfirmationSuppressionOuverte(false);
+      onRetour();
+    } catch (err) {
+      toast.error("Suppression impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSuppressionEnCours(false);
+    }
   }
 
   async function rescanner(): Promise<void> {
@@ -382,6 +417,13 @@ export function SessionDetailPage({
             </Button>
             <Button variant="outline" onClick={() => setEditionSession(true)}>
               Modifier
+            </Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setConfirmationSuppressionOuverte(true)}
+            >
+              Supprimer
             </Button>
           </div>
         </div>
@@ -811,6 +853,52 @@ export function SessionDetailPage({
               disabled={actionCoherenceEnCours}
             >
               Fermer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmationSuppressionOuverte}
+        onOpenChange={(open) => {
+          if (!open && !suppressionEnCours) {
+            setConfirmationSuppressionOuverte(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer définitivement cette session ?</DialogTitle>
+            <DialogDescription>
+              <strong>{session.commanditaire}</strong> ·{" "}
+              {session.date.toLocaleDateString("fr-FR")} ·{" "}
+              {session.acheteurs.length} acheteur
+              {session.acheteurs.length > 1 ? "s" : ""}.
+              <br />
+              <br />
+              Cette action supprimera la session, toutes ses commandes, et
+              tous les fichiers d'export que cette session a créés (papier
+              et numérique). Le dossier source ({session.dossierSource.valeur}
+              ) ne sera pas modifié — vos photos originales restent intactes.
+              <br />
+              <br />
+              <strong>L'opération est irréversible.</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmationSuppressionOuverte(false)}
+              disabled={suppressionEnCours}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={supprimerSessionCourante}
+              disabled={suppressionEnCours}
+            >
+              {suppressionEnCours ? "Suppression…" : "Supprimer la session"}
             </Button>
           </DialogFooter>
         </DialogContent>

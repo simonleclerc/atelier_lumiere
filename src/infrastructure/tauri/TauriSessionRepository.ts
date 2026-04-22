@@ -86,6 +86,16 @@ export class TauriSessionRepository implements SessionRepository {
     });
   }
 
+  async delete(id: string): Promise<void> {
+    const raws = await this.loadRaw();
+    const filtered = raws.filter((r) => r.id !== id);
+    if (filtered.length === raws.length) return; // idempotent
+    await this.ensureAppDir();
+    await writeTextFile(FICHIER, JSON.stringify(filtered, null, 2), {
+      baseDir: BaseDirectory.AppData,
+    });
+  }
+
   private async ensureAppDir(): Promise<void> {
     const ok = await exists("", { baseDir: BaseDirectory.AppData });
     if (!ok) {
