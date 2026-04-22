@@ -44,7 +44,7 @@ Liste des features de confort de vie à implémenter. Pas de priorisation figée
 - [x] Backup / export des données de l'app (pas juste les photos) + import pour restaurer
 
 ## other
-- [ ] mettre une limite sur les photo numerique, une seule max
+- [x] mettre une limite sur les photo numerique, une seule max <!-- invariant Commande.ajouterTirage : quantité ≤ 1 pour un tirage numérique (consolidation incluse). Plusieurs photos en numérique autorisées (1 exemplaire chacune), cohérent avec la future offre "70€ = numérique de toutes les photos". UI : input quantité désactivé à 1 quand format = NUMERIQUE -->
 - [ ] rajouter une offre sur la session, si un montant est dépassé (par exemple 70€), alors on inclut le format numérique de toutes les photos commandées gratuitement.
   - il faudra prendre en compte ca au scan, si l'offre est active, on les rajoute. A l'inverse si les numériques sont toutes dispo mais que la commande n'est plus au bon montant => on supprimer les numériques
   - a voir ensemble, mais peut etre gerer ca avec des event => lorsque le montant d'une commande change -> on fait le check si il faut toucher les fichiers numériques

@@ -6,6 +6,7 @@ import {
   Commande,
   estFichierExportDeSlug,
   parserNomFichierExport,
+  QuantiteNumeriqueInvalide,
   slugifierNomAcheteur,
   TirageIntrouvable,
 } from "./Commande";
@@ -86,6 +87,78 @@ describe("Commande (agrégat racine avec tirages)", () => {
         quantite: 1,
       });
       expect(c.tirages).toHaveLength(2);
+    });
+
+    describe("invariant numérique : 1 exemplaire max par photo", () => {
+      it("accepte un tirage numérique avec quantité 1", () => {
+        const c = commandeDemo();
+        c.ajouterTirage({
+          photoNumero: 145,
+          format: Format.NUMERIQUE,
+          quantite: 1,
+        });
+        expect(c.tirages).toHaveLength(1);
+        expect(c.tirages[0].quantite).toBe(1);
+      });
+
+      it("accepte plusieurs tirages numériques sur des photos différentes", () => {
+        const c = commandeDemo();
+        c.ajouterTirage({
+          photoNumero: 1,
+          format: Format.NUMERIQUE,
+          quantite: 1,
+        });
+        c.ajouterTirage({
+          photoNumero: 2,
+          format: Format.NUMERIQUE,
+          quantite: 1,
+        });
+        expect(c.tirages).toHaveLength(2);
+      });
+
+      it("refuse d'ajouter un numérique avec quantité > 1", () => {
+        const c = commandeDemo();
+        expect(() =>
+          c.ajouterTirage({
+            photoNumero: 145,
+            format: Format.NUMERIQUE,
+            quantite: 2,
+          }),
+        ).toThrow(QuantiteNumeriqueInvalide);
+      });
+
+      it("refuse une consolidation qui ferait dépasser 1 (1 + 1)", () => {
+        const c = commandeDemo();
+        c.ajouterTirage({
+          photoNumero: 145,
+          format: Format.NUMERIQUE,
+          quantite: 1,
+        });
+        expect(() =>
+          c.ajouterTirage({
+            photoNumero: 145,
+            format: Format.NUMERIQUE,
+            quantite: 1,
+          }),
+        ).toThrow(QuantiteNumeriqueInvalide);
+        // le premier tirage reste intact
+        expect(c.tirages[0].quantite).toBe(1);
+      });
+
+      it("laisse les formats papier consolider normalement", () => {
+        const c = commandeDemo();
+        c.ajouterTirage({
+          photoNumero: 145,
+          format: Format._20x30,
+          quantite: 2,
+        });
+        c.ajouterTirage({
+          photoNumero: 145,
+          format: Format._20x30,
+          quantite: 3,
+        });
+        expect(c.tirages[0].quantite).toBe(5);
+      });
     });
   });
 

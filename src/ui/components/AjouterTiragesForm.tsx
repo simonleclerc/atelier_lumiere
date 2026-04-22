@@ -37,6 +37,17 @@ export function AjouterTiragesForm({
   const [enCours, setEnCours] = useState(false);
 
   const items = session.photos.map((p) => p.numero);
+  const formatEstNumerique = Format.depuis(format).estNumerique();
+
+  function changerFormat(nouveauFormat: string): void {
+    setFormat(nouveauFormat);
+    // Invariant métier : un fichier numérique = 1 exemplaire max.
+    // On reset la quantité pour éviter que l'utilisateur soumette un
+    // formulaire déjà invalide depuis un précédent choix.
+    if (Format.depuis(nouveauFormat).estNumerique()) {
+      setQuantite("1");
+    }
+  }
 
   async function soumettre(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -116,7 +127,7 @@ export function AjouterTiragesForm({
           Format
           <select
             value={format}
-            onChange={(e) => setFormat(e.currentTarget.value)}
+            onChange={(e) => changerFormat(e.currentTarget.value)}
             className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {Format.TOUS.map((f) => {
@@ -134,13 +145,21 @@ export function AjouterTiragesForm({
           <input
             type="number"
             min={1}
+            max={formatEstNumerique ? 1 : undefined}
             value={quantite}
             onChange={(e) => setQuantite(e.currentTarget.value)}
+            disabled={formatEstNumerique}
             required
-            className="w-20 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="w-20 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           />
         </label>
       </div>
+      {formatEstNumerique && (
+        <p className="text-xs text-muted-foreground">
+          Le format numérique est livré en 1 exemplaire par photo — un
+          fichier digital ne se duplique pas.
+        </p>
+      )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onAnnuler}>
           Annuler

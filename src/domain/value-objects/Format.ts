@@ -40,6 +40,15 @@ export class Format {
     return this.valeur === autre.valeur;
   }
 
+  /**
+   * True si ce format est la livraison numérique (fichier digital, pas un
+   * tirage papier). Sert aux invariants métier qui dépendent du média :
+   * par exemple "un fichier digital ne se commande qu'en 1 exemplaire".
+   */
+  estNumerique(): boolean {
+    return this.egale(Format.NUMERIQUE);
+  }
+
   /** Nom du sous-dossier créé à l'export (ex : "20x30", "Numerique"). */
   toDossierName(): string {
     return this.valeur;

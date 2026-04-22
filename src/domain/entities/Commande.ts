@@ -35,6 +35,21 @@ export class TirageIntrouvable extends Error {
   }
 }
 
+/**
+ * Invariant métier : un fichier numérique se commande en 1 exemplaire
+ * maximum par photo (rien ne justifie 2 copies d'un fichier digital). Le
+ * buyer peut en revanche avoir du numérique sur plusieurs photos
+ * différentes, chacune en 1 seul exemplaire.
+ */
+export class QuantiteNumeriqueInvalide extends Error {
+  constructor(photoNumero: number) {
+    super(
+      `Un tirage numérique est limité à 1 exemplaire (photo n°${photoNumero}).`,
+    );
+    this.name = "QuantiteNumeriqueInvalide";
+  }
+}
+
 export interface CommandeDonnees {
   readonly id: string;
   readonly sessionId: string;
@@ -111,6 +126,12 @@ export class Commande {
     const indexExistant = this._tirages.findIndex((t) =>
       t.egaleContenu(params.photoNumero, params.format),
     );
+    const quantiteExistante =
+      indexExistant !== -1 ? this._tirages[indexExistant].quantite : 0;
+    const quantiteFinale = quantiteExistante + params.quantite;
+    if (params.format.estNumerique() && quantiteFinale > 1) {
+      throw new QuantiteNumeriqueInvalide(params.photoNumero);
+    }
     let impacte: Tirage;
     if (indexExistant !== -1) {
       const consolide = this._tirages[indexExistant].avecQuantiteCumulee(
