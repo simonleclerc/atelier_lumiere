@@ -140,7 +140,7 @@ export function SessionsPage({
       )}
 
       {mode === "liste" && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-6">
           {chargement && (
             <p className="text-sm text-muted-foreground">Chargement…</p>
           )}
@@ -151,33 +151,85 @@ export function SessionsPage({
           )}
           {!chargement && sessions.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              Aucune session pour l'instant. Clique « Nouvelle session » pour commencer.
+              Aucune session pour l'instant. Clique « Nouvelle session » pour
+              commencer.
             </p>
           )}
-          {sessions.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => onOuvrirSession(s.id)}
-              className="flex flex-col gap-1 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-muted"
-            >
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-base font-semibold">{s.commanditaire}</h2>
-                <span className="text-xs text-muted-foreground">
-                  {s.type} · {s.date.toLocaleDateString("fr-FR")}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Référent : {s.referent}
-              </p>
-              <p className="text-sm">
-                {s.nombrePhotos()} photo{s.nombrePhotos() > 1 ? "s" : ""} · {s.acheteurs.length} acheteur
-                {s.acheteurs.length > 1 ? "s" : ""}
-              </p>
-            </button>
-          ))}
+
+          <ListeSessions
+            titre="Actives"
+            sessions={sessions.filter((s) => !s.archivee)}
+            onOuvrirSession={onOuvrirSession}
+            messageVide="Aucune session active."
+          />
+
+          <ListeSessions
+            titre="Archivées"
+            sessions={sessions.filter((s) => s.archivee)}
+            onOuvrirSession={onOuvrirSession}
+            messageVide={null}
+          />
         </div>
       )}
+    </section>
+  );
+}
+
+function ListeSessions({
+  titre,
+  sessions,
+  onOuvrirSession,
+  messageVide,
+}: {
+  titre: string;
+  sessions: readonly Session[];
+  onOuvrirSession: (id: string) => void;
+  messageVide: string | null;
+}) {
+  // On masque entièrement la section archivée si elle est vide pour ne pas
+  // encombrer l'écran d'un utilisateur qui n'archive jamais.
+  if (sessions.length === 0 && messageVide === null) return null;
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold uppercase text-muted-foreground">
+        {titre} ({sessions.length})
+      </h2>
+      {sessions.length === 0 && messageVide && (
+        <p className="text-sm text-muted-foreground">{messageVide}</p>
+      )}
+      {sessions.map((s) => (
+        <button
+          key={s.id}
+          type="button"
+          onClick={() => onOuvrirSession(s.id)}
+          className={
+            "flex flex-col gap-1 rounded-lg border border-border bg-card p-4 text-left transition-colors hover:bg-muted" +
+            (s.archivee ? " opacity-70" : "")
+          }
+        >
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="flex items-center gap-2 text-base font-semibold">
+              {s.commanditaire}
+              {s.archivee && (
+                <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium uppercase text-muted-foreground">
+                  Archivée
+                </span>
+              )}
+            </h3>
+            <span className="text-xs text-muted-foreground">
+              {s.type} · {s.date.toLocaleDateString("fr-FR")}
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Référent : {s.referent}
+          </p>
+          <p className="text-sm">
+            {s.nombrePhotos()} photo{s.nombrePhotos() > 1 ? "s" : ""} ·{" "}
+            {s.acheteurs.length} acheteur
+            {s.acheteurs.length > 1 ? "s" : ""}
+          </p>
+        </button>
+      ))}
     </section>
   );
 }

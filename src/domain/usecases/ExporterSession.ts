@@ -1,4 +1,5 @@
 import type { CommandeRepository } from "../ports/CommandeRepository";
+import type { SessionRepository } from "../ports/SessionRepository";
 import type { ExporterCommandeUseCase } from "./ExporterCommande";
 
 /**
@@ -40,12 +41,15 @@ export interface ExporterSessionResultat {
 export class ExporterSessionUseCase {
   constructor(
     private readonly commandeRepository: CommandeRepository,
+    private readonly sessionRepository: SessionRepository,
     private readonly exporterCommande: ExporterCommandeUseCase,
   ) {}
 
   async execute(
     entree: ExporterSessionEntree,
   ): Promise<ExporterSessionResultat> {
+    const session = await this.sessionRepository.findById(entree.sessionId);
+    session.assertModifiable();
     const commandes = await this.commandeRepository.findBySessionId(
       entree.sessionId,
     );

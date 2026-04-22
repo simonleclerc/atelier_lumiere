@@ -11,7 +11,9 @@ import type { TrouverSessionParIdUseCase } from "@/domain/usecases/TrouverSessio
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
 import type { RetirerTirageDeCommandeUseCase } from "@/domain/usecases/RetirerTirageDeCommande";
+import type { ArchiverSessionUseCase } from "@/domain/usecases/ArchiverSession";
 import type { ControlerCoherenceSessionUseCase } from "@/domain/usecases/ControlerCoherenceSession";
+import type { DesarchiverSessionUseCase } from "@/domain/usecases/DesarchiverSession";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
 import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
@@ -40,6 +42,8 @@ interface AppProps {
   rescannerDossierSource: RescannerDossierSourceUseCase;
   supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
   supprimerSession: SupprimerSessionUseCase;
+  archiverSession: ArchiverSessionUseCase;
+  desarchiverSession: DesarchiverSessionUseCase;
   exporterSauvegarde: ExporterSauvegardeUseCase;
   importerSauvegarde: ImporterSauvegardeUseCase;
   dossierPicker: DossierPicker;
@@ -65,6 +69,8 @@ function App({
   rescannerDossierSource,
   supprimerOrphelinsExport,
   supprimerSession,
+  archiverSession,
+  desarchiverSession,
   exporterSauvegarde,
   importerSauvegarde,
   dossierPicker,
@@ -104,6 +110,8 @@ function App({
             rescannerDossierSource={rescannerDossierSource}
             supprimerOrphelinsExport={supprimerOrphelinsExport}
             supprimerSession={supprimerSession}
+            archiverSession={archiverSession}
+            desarchiverSession={desarchiverSession}
             dossierPicker={dossierPicker}
             onRetour={() => setVue({ nom: "liste" })}
           />

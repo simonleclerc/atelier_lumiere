@@ -1,16 +1,72 @@
 import { describe, it, expect } from "vitest";
 import { Commande } from "../entities/Commande";
+import { Session, SessionArchiveeNonModifiable } from "../entities/Session";
 import {
   CommandeIntrouvable,
   type CommandeRepository,
 } from "../ports/CommandeRepository";
+import {
+  SessionIntrouvable,
+  type SessionRepository,
+} from "../ports/SessionRepository";
+import { CheminDossier } from "../value-objects/CheminDossier";
 import { Format } from "../value-objects/Format";
+import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
+import { Montant } from "../value-objects/Montant";
 import type {
   ExporterCommandeEntree,
   ExporterCommandeResultat,
   ExporterCommandeUseCase,
 } from "./ExporterCommande";
 import { ExporterSessionUseCase } from "./ExporterSession";
+
+function grille(): GrilleTarifaire {
+  return new GrilleTarifaire([
+    [Format._15x23, new Montant(800)],
+    [Format._20x30, new Montant(1200)],
+    [Format._30x45, new Montant(1800)],
+    [Format.NUMERIQUE, new Montant(500)],
+  ]);
+}
+
+function sessionDemo(id: string): Session {
+  return Session.creer({
+    id,
+    commanditaire: "X",
+    referent: "Y",
+    date: new Date("2026-04-01"),
+    type: "Spectacle",
+    dossierSource: new CheminDossier("/src"),
+    dossierExport: new CheminDossier("/exp"),
+    grilleTarifaire: grille(),
+    photoNumeros: [1],
+  });
+}
+
+class InMemorySessionRepo implements SessionRepository {
+  readonly map = new Map<string, Session>();
+  constructor(initial: Session[] = []) {
+    initial.forEach((s) => this.map.set(s.id, s));
+  }
+  async save(s: Session): Promise<void> {
+    this.map.set(s.id, s);
+  }
+  async findById(id: string): Promise<Session> {
+    const s = this.map.get(id);
+    if (!s) throw new SessionIntrouvable(id);
+    return s;
+  }
+  async findAll(): Promise<readonly Session[]> {
+    return Array.from(this.map.values());
+  }
+  async delete(id: string): Promise<void> {
+    this.map.delete(id);
+  }
+  async replaceAll(sessions: readonly Session[]): Promise<void> {
+    this.map.clear();
+    sessions.forEach((s) => this.map.set(s.id, s));
+  }
+}
 
 class InMemoryCommandeRepo implements CommandeRepository {
   readonly map = new Map<string, Commande>();
@@ -100,6 +156,7 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     stub.resultats.set("cmd-C", { fichiersCrees: 5, orphelinsSupprimes: 2 });
     const useCase = new ExporterSessionUseCase(
       repo,
+      new InMemorySessionRepo([sessionDemo(sessionId)]),
       stub as unknown as ExporterCommandeUseCase,
     );
 
@@ -126,6 +183,7 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     stub.resultats.set("cmd-C", { fichiersCrees: 5, orphelinsSupprimes: 0 });
     const useCase = new ExporterSessionUseCase(
       repo,
+      new InMemorySessionRepo([sessionDemo(sessionId)]),
       stub as unknown as ExporterCommandeUseCase,
     );
 
@@ -146,6 +204,7 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     const repo = new InMemoryCommandeRepo();
     const useCase = new ExporterSessionUseCase(
       repo,
+      new InMemorySessionRepo([sessionDemo("sess-vide")]),
       new StubExporterCommande() as unknown as ExporterCommandeUseCase,
     );
 
@@ -174,6 +233,7 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     stub.resultats.set("cmd-C", { fichiersCrees: 4, orphelinsSupprimes: 0 });
     const useCase = new ExporterSessionUseCase(
       repo,
+      new InMemorySessionRepo([sessionDemo(sessionId)]),
       stub as unknown as ExporterCommandeUseCase,
     );
 
@@ -182,5 +242,20 @@ describe("ExporterSessionUseCase (orchestrateur)", () => {
     expect(r.commandesReussies).toBe(1);
     expect(r.erreurs.map((e) => e.commandeId)).toEqual(["cmd-A", "cmd-B"]);
     expect(r.fichiersCrees).toBe(4);
+  });
+
+  it("refuse d'exporter une session archivée", async () => {
+    const sessionId = "sess-1";
+    const session = sessionDemo(sessionId);
+    session.archiver();
+    const useCase = new ExporterSessionUseCase(
+      new InMemoryCommandeRepo(),
+      new InMemorySessionRepo([session]),
+      new StubExporterCommande() as unknown as ExporterCommandeUseCase,
+    );
+
+    await expect(useCase.execute({ sessionId })).rejects.toBeInstanceOf(
+      SessionArchiveeNonModifiable,
+    );
   });
 });

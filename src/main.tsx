@@ -23,6 +23,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       rescannerDossierSource={container.rescannerDossierSource}
       supprimerOrphelinsExport={container.supprimerOrphelinsExport}
       supprimerSession={container.supprimerSession}
+      archiverSession={container.archiverSession}
+      desarchiverSession={container.desarchiverSession}
       exporterSauvegarde={container.exporterSauvegarde}
       importerSauvegarde={container.importerSauvegarde}
       dossierPicker={container.dossierPicker}

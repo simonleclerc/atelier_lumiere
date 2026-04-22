@@ -51,6 +51,7 @@ export class SupprimerOrphelinsExportUseCase {
       return { fichiersSupprimes: 0, ignoresCarAttendus: 0 };
     }
     const session = await this.sessionRepository.findById(entree.sessionId);
+    session.assertModifiable();
     const commandes = await this.commandeRepository.findBySessionId(
       entree.sessionId,
     );

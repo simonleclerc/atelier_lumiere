@@ -54,6 +54,7 @@ export class AjouterTirageACommandeUseCase {
     entree: AjouterTirageACommandeEntree,
   ): Promise<AjouterTirageACommandeResultat> {
     const session = await this.sessionRepository.findById(entree.sessionId);
+    session.assertModifiable();
 
     if (!session.acheteurs.some((a) => a.id === entree.acheteurId)) {
       throw new AcheteurNAppartientPasASession(

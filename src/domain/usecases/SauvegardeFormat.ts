@@ -62,6 +62,7 @@ interface SessionJson {
   readonly grilleTarifaire: readonly GrilleJson[];
   readonly photos: readonly number[];
   readonly acheteurs: readonly AcheteurJson[];
+  readonly archivee?: boolean;
 }
 
 interface TirageJson {
@@ -159,6 +160,7 @@ function sessionVersJson(session: Session): SessionJson {
       email: a.email?.valeur,
       telephone: a.telephone,
     })),
+    archivee: session.archivee,
   };
 }
 
@@ -186,6 +188,7 @@ function sessionDepuisJson(raw: SessionJson): Session {
           telephone: a.telephone,
         }),
     ),
+    archivee: raw.archivee ?? false,
   });
 }
 

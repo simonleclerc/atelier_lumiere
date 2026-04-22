@@ -7,6 +7,7 @@ import {
   AcheteurIntrouvableDansSession,
   NomAcheteurDejaUtiliseDansSession,
   Session,
+  SessionArchiveeNonModifiable,
 } from "./Session";
 
 function grilleParDefaut(): GrilleTarifaire {
@@ -193,6 +194,53 @@ describe("Session (agrégat racine)", () => {
       });
       expect(modifie.nom).toBe("Martin");
       expect(modifie.email?.valeur).toBe("new@x.com");
+    });
+  });
+
+  describe("archivage", () => {
+    it("est non archivée par défaut", () => {
+      const s = Session.creer(entreeValide);
+      expect(s.archivee).toBe(false);
+    });
+
+    it("archiver() bascule le flag, desarchiver() le réinitialise", () => {
+      const s = Session.creer(entreeValide);
+      s.archiver();
+      expect(s.archivee).toBe(true);
+      s.desarchiver();
+      expect(s.archivee).toBe(false);
+    });
+
+    it("refuse toute mutation quand la session est archivée", () => {
+      const s = Session.creer(entreeValide);
+      s.ajouterAcheteur({ nom: "Martin" });
+      s.archiver();
+      expect(() => s.ajouterAcheteur({ nom: "Jean" })).toThrow(
+        SessionArchiveeNonModifiable,
+      );
+      expect(() =>
+        s.modifierAcheteur(s.acheteurs[0].id, { nom: "Martin Dupont" }),
+      ).toThrow(SessionArchiveeNonModifiable);
+      expect(() =>
+        s.modifierInfos({
+          commanditaire: "X",
+          referent: "Y",
+          date: new Date("2026-04-01"),
+          type: "Spectacle",
+          dossierSource: new CheminDossier("/a"),
+          dossierExport: new CheminDossier("/b"),
+        }),
+      ).toThrow(SessionArchiveeNonModifiable);
+      expect(() => s.remplacerPhotos([1, 2])).toThrow(
+        SessionArchiveeNonModifiable,
+      );
+    });
+
+    it("autorise à nouveau les mutations après desarchiver()", () => {
+      const s = Session.creer(entreeValide);
+      s.archiver();
+      s.desarchiver();
+      expect(() => s.ajouterAcheteur({ nom: "Martin" })).not.toThrow();
     });
   });
 

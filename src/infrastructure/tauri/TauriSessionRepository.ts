@@ -53,6 +53,8 @@ interface SessionJson {
   readonly grilleTarifaire: readonly GrilleJson[];
   readonly photos: readonly number[];
   readonly acheteurs?: readonly AcheteurJson[];
+  /** Optionnel pour la rétrocompat avec les sessions sauvées avant l'arrivée de l'archivage. */
+  readonly archivee?: boolean;
 }
 
 export class TauriSessionRepository implements SessionRepository {
@@ -133,6 +135,7 @@ function toJson(session: Session): SessionJson {
       email: a.email?.valeur,
       telephone: a.telephone,
     })),
+    archivee: session.archivee,
   };
 }
 
@@ -160,5 +163,6 @@ function fromJson(raw: SessionJson): Session {
           telephone: a.telephone,
         }),
     ),
+    archivee: raw.archivee ?? false,
   });
 }

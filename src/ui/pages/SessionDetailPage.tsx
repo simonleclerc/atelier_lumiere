@@ -22,10 +22,12 @@ import { Montant } from "@/domain/value-objects/Montant";
 import { StatutExport } from "@/domain/value-objects/StatutExport";
 import type { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import type { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
+import type { ArchiverSessionUseCase } from "@/domain/usecases/ArchiverSession";
 import type {
   ControlerCoherenceSessionResultat,
   ControlerCoherenceSessionUseCase,
 } from "@/domain/usecases/ControlerCoherenceSession";
+import type { DesarchiverSessionUseCase } from "@/domain/usecases/DesarchiverSession";
 import type { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import type { ExporterSessionUseCase } from "@/domain/usecases/ExporterSession";
 import type { ListerCommandesDeSessionUseCase } from "@/domain/usecases/ListerCommandesDeSession";
@@ -55,6 +57,8 @@ interface Props {
   rescannerDossierSource: RescannerDossierSourceUseCase;
   supprimerOrphelinsExport: SupprimerOrphelinsExportUseCase;
   supprimerSession: SupprimerSessionUseCase;
+  archiverSession: ArchiverSessionUseCase;
+  desarchiverSession: DesarchiverSessionUseCase;
   dossierPicker: DossierPicker;
   onRetour: () => void;
 }
@@ -84,6 +88,8 @@ export function SessionDetailPage({
   rescannerDossierSource,
   supprimerOrphelinsExport,
   supprimerSession,
+  archiverSession,
+  desarchiverSession,
   dossierPicker,
   onRetour,
 }: Props) {
@@ -112,6 +118,9 @@ export function SessionDetailPage({
   const [confirmationSuppressionOuverte, setConfirmationSuppressionOuverte] =
     useState(false);
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
+  const [confirmationArchivageOuverte, setConfirmationArchivageOuverte] =
+    useState(false);
+  const [archivageEnCours, setArchivageEnCours] = useState(false);
 
   const recharger = useCallback(async () => {
     setChargement(true);
@@ -224,6 +233,44 @@ export function SessionDetailPage({
         />
       </section>
     );
+  }
+
+  async function archiverSessionCourante(): Promise<void> {
+    setArchivageEnCours(true);
+    try {
+      const r = await archiverSession.execute({ sessionId });
+      const description =
+        r.fichiersSupprimes > 0
+          ? `${r.fichiersSupprimes} fichier${r.fichiersSupprimes > 1 ? "s" : ""} d'export supprimé${r.fichiersSupprimes > 1 ? "s" : ""}`
+          : "Aucun fichier à nettoyer";
+      toast.success("Session archivée", { description });
+      setConfirmationArchivageOuverte(false);
+      await recharger();
+    } catch (err) {
+      toast.error("Archivage impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setArchivageEnCours(false);
+    }
+  }
+
+  async function desarchiverSessionCourante(): Promise<void> {
+    setArchivageEnCours(true);
+    try {
+      await desarchiverSession.execute({ sessionId });
+      toast.success("Session désarchivée", {
+        description:
+          "Les fichiers d'export n'ont pas été restaurés — ré-exporte les commandes pour récupérer les fichiers.",
+      });
+      await recharger();
+    } catch (err) {
+      toast.error("Désarchivage impossible", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setArchivageEnCours(false);
+    }
   }
 
   async function supprimerSessionCourante(): Promise<void> {
@@ -396,28 +443,58 @@ export function SessionDetailPage({
           ← Retour aux sessions
         </Button>
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-semibold">{session.commanditaire}</h1>
+          <h1 className="flex items-center gap-3 text-2xl font-semibold">
+            {session.commanditaire}
+            {session.archivee && (
+              <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium uppercase text-muted-foreground">
+                Archivée
+              </span>
+            )}
+          </h1>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">
               {session.type} · {session.date.toLocaleDateString("fr-FR")}
             </span>
-            <Button
-              variant="outline"
-              onClick={rescanner}
-              disabled={rescanEnCours}
-            >
-              {rescanEnCours ? "Rescan…" : "Rescanner les photos"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={ouvrirControleCoherence}
-              disabled={chargementCoherence}
-            >
-              Contrôler la cohérence
-            </Button>
-            <Button variant="outline" onClick={() => setEditionSession(true)}>
-              Modifier
-            </Button>
+            {!session.archivee && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={rescanner}
+                  disabled={rescanEnCours}
+                >
+                  {rescanEnCours ? "Rescan…" : "Rescanner les photos"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={ouvrirControleCoherence}
+                  disabled={chargementCoherence}
+                >
+                  Contrôler la cohérence
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setEditionSession(true)}
+                >
+                  Modifier
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmationArchivageOuverte(true)}
+                  disabled={archivageEnCours}
+                >
+                  Archiver
+                </Button>
+              </>
+            )}
+            {session.archivee && (
+              <Button
+                variant="outline"
+                onClick={desarchiverSessionCourante}
+                disabled={archivageEnCours}
+              >
+                {archivageEnCours ? "Désarchivage…" : "Désarchiver"}
+              </Button>
+            )}
             <Button
               variant="outline"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -431,6 +508,13 @@ export function SessionDetailPage({
           Référent : {session.referent} · {session.nombrePhotos()} photo
           {session.nombrePhotos() > 1 ? "s" : ""}
         </p>
+        {session.archivee && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+            Cette session est archivée. Toutes les actions de modification
+            sont désactivées et les fichiers d'export ont été supprimés du
+            disque. Désarchive-la pour pouvoir l'éditer à nouveau.
+          </div>
+        )}
       </header>
 
       <RecapSession
@@ -440,11 +524,13 @@ export function SessionDetailPage({
         onExport={recharger}
       />
 
-      <GrilleTarifaireEditor
-        session={session}
-        modifierPrix={modifierPrix}
-        onMaj={recharger}
-      />
+      {!session.archivee && (
+        <GrilleTarifaireEditor
+          session={session}
+          modifierPrix={modifierPrix}
+          onMaj={recharger}
+        />
+      )}
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -470,7 +556,7 @@ export function SessionDetailPage({
                 </select>
               </label>
             )}
-            {!nouvelAcheteurOuvert && (
+            {!session.archivee && !nouvelAcheteurOuvert && (
               <Button onClick={() => setNouvelAcheteurOuvert(true)}>
                 Nouvel acheteur
               </Button>
@@ -903,6 +989,54 @@ export function SessionDetailPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={confirmationArchivageOuverte}
+        onOpenChange={(open) => {
+          if (!open && !archivageEnCours) {
+            setConfirmationArchivageOuverte(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archiver cette session ?</DialogTitle>
+            <DialogDescription>
+              <strong>{session.commanditaire}</strong> ·{" "}
+              {session.date.toLocaleDateString("fr-FR")} ·{" "}
+              {session.acheteurs.length} acheteur
+              {session.acheteurs.length > 1 ? "s" : ""}.
+              <br />
+              <br />
+              L'archivage <strong>supprime tous les fichiers d'export</strong>
+              {" "}créés par cette session (papier et numérique) pour libérer
+              de l'espace, mais <strong>conserve toutes les données</strong>
+              {" "}: commandes, acheteurs, grille tarifaire, statuts. La
+              session devient consultable en lecture seule. Tu pourras la
+              désarchiver plus tard pour la modifier à nouveau (les fichiers
+              d'export devront être recréés via un ré-export manuel).
+              <br />
+              <br />
+              Le dossier source n'est jamais touché.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmationArchivageOuverte(false)}
+              disabled={archivageEnCours}
+            >
+              Annuler
+            </Button>
+            <Button
+              onClick={archiverSessionCourante}
+              disabled={archivageEnCours}
+            >
+              {archivageEnCours ? "Archivage…" : "Archiver la session"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -996,11 +1130,13 @@ function RecapSession({
           <h2 className="text-lg font-semibold">Récapitulatif</h2>
           <StatutBadge statut={statutSession} />
         </div>
-        <Button onClick={exporterTout} disabled={exportEnCours}>
-          {exportEnCours
-            ? "Export…"
-            : `Exporter toute la session (${commandes.length})`}
-        </Button>
+        {!session.archivee && (
+          <Button onClick={exporterTout} disabled={exportEnCours}>
+            {exportEnCours
+              ? "Export…"
+              : `Exporter toute la session (${commandes.length})`}
+          </Button>
+        )}
       </div>
       <dl className="grid grid-cols-3 gap-3">
         <div className="flex flex-col">
@@ -1114,13 +1250,20 @@ function AcheteurCard({
               {total.toString()}
             </span>
           )}
-          <Button variant="ghost" onClick={onModifier}>
-            Modifier
-          </Button>
-          {!ajoutOuvert && (
-            <Button variant="outline" onClick={() => setAjoutOuvert(true)}>
-              Ajouter des photos
-            </Button>
+          {!session.archivee && (
+            <>
+              <Button variant="ghost" onClick={onModifier}>
+                Modifier
+              </Button>
+              {!ajoutOuvert && (
+                <Button
+                  variant="outline"
+                  onClick={() => setAjoutOuvert(true)}
+                >
+                  Ajouter des photos
+                </Button>
+              )}
+            </>
           )}
         </div>
       </header>
@@ -1156,42 +1299,46 @@ function AcheteurCard({
                     tirage → {t.total(session.grilleTarifaire).toString()}
                   </span>
                 </div>
-                <Button
-                  variant="ghost"
-                  onClick={async () => {
-                    const confirme = window.confirm(
-                      `Retirer la photo n°${t.photoNumero} (${t.format.toDossierName()} · ×${t.quantite}) ?`,
-                    );
-                    if (!confirme) return;
-                    try {
-                      const r = await retirerTirage.execute({
-                        commandeId: commande.id,
-                        tirageId: t.id,
-                      });
-                      toast.success(
-                        r.commandeSupprimee
-                          ? "Dernière photo retirée — commande supprimée"
-                          : "Photo retirée",
+                {!session.archivee && (
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      const confirme = window.confirm(
+                        `Retirer la photo n°${t.photoNumero} (${t.format.toDossierName()} · ×${t.quantite}) ?`,
                       );
-                      onMaj();
-                    } catch (err) {
-                      toast.error("Retrait impossible", {
-                        description:
-                          err instanceof Error ? err.message : String(err),
-                      });
-                    }
-                  }}
-                >
-                  Retirer
-                </Button>
+                      if (!confirme) return;
+                      try {
+                        const r = await retirerTirage.execute({
+                          commandeId: commande.id,
+                          tirageId: t.id,
+                        });
+                        toast.success(
+                          r.commandeSupprimee
+                            ? "Dernière photo retirée — commande supprimée"
+                            : "Photo retirée",
+                        );
+                        onMaj();
+                      } catch (err) {
+                        toast.error("Retrait impossible", {
+                          description:
+                            err instanceof Error ? err.message : String(err),
+                        });
+                      }
+                    }}
+                  >
+                    Retirer
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
-          <div className="flex justify-end border-t border-border pt-3">
-            <Button onClick={exporter} disabled={exportEnCours}>
-              {exportEnCours ? "Export…" : "Exporter la commande"}
-            </Button>
-          </div>
+          {!session.archivee && (
+            <div className="flex justify-end border-t border-border pt-3">
+              <Button onClick={exporter} disabled={exportEnCours}>
+                {exportEnCours ? "Export…" : "Exporter la commande"}
+              </Button>
+            </div>
+          )}
         </>
       )}
     </article>

@@ -55,6 +55,7 @@ export class ExporterCommandeUseCase {
   ): Promise<ExporterCommandeResultat> {
     const commande = await this.commandeRepository.findById(entree.commandeId);
     const session = await this.sessionRepository.findById(commande.sessionId);
+    session.assertModifiable();
     const acheteur = session.acheteurs.find((a) => a.id === commande.acheteurId);
     if (!acheteur) {
       throw new AcheteurNAppartientPasASession(

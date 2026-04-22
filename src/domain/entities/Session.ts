@@ -41,6 +41,20 @@ export class AcheteurIntrouvableDansSession extends Error {
   }
 }
 
+/**
+ * Invariant : une session archivée est gelée — aucune modification de
+ * son état ni de celui de ses commandes filles n'est permise. Désarchiver
+ * via `Session.desarchiver()` la rend de nouveau modifiable.
+ */
+export class SessionArchiveeNonModifiable extends Error {
+  constructor(sessionId: string) {
+    super(
+      `La session "${sessionId}" est archivée : aucune modification n'est autorisée. Désarchive-la d'abord pour la modifier.`,
+    );
+    this.name = "SessionArchiveeNonModifiable";
+  }
+}
+
 export interface SessionDonnees {
   readonly id: string;
   readonly commanditaire: string;
@@ -52,6 +66,8 @@ export interface SessionDonnees {
   readonly grilleTarifaire: GrilleTarifaire;
   readonly photos: readonly Photo[];
   readonly acheteurs?: readonly Acheteur[];
+  /** Session archivée = gelée, plus aucune modification possible (défaut false). */
+  readonly archivee?: boolean;
 }
 
 function normaliserNom(nom: string): string {
@@ -119,6 +135,7 @@ export class Session {
   private _grilleTarifaire: GrilleTarifaire;
   private readonly _acheteurs: Acheteur[];
   private _photos: Photo[];
+  private _archivee: boolean;
 
   constructor(donnees: SessionDonnees) {
     if (!donnees.id.trim()) {
@@ -145,10 +162,41 @@ export class Session {
     this._grilleTarifaire = donnees.grilleTarifaire;
     this._photos = [...donnees.photos].sort((a, b) => a.numero - b.numero);
     this._acheteurs = [...acheteurs];
+    this._archivee = donnees.archivee ?? false;
   }
 
   get photos(): readonly Photo[] {
     return this._photos;
+  }
+
+  get archivee(): boolean {
+    return this._archivee;
+  }
+
+  /**
+   * Bascule la session en mode archivé. Aucune méthode mutante de
+   * l'agrégat ne pourra plus être appelée jusqu'au prochain appel à
+   * `desarchiver()`. Les use cases qui touchent les commandes filles
+   * doivent aussi vérifier via `assertModifiable()`.
+   */
+  archiver(): void {
+    this._archivee = true;
+  }
+
+  desarchiver(): void {
+    this._archivee = false;
+  }
+
+  /**
+   * Garde de modification : à appeler en début de toute opération
+   * mutante côté domaine (méthode de Session) ou côté use case (avant
+   * de toucher une Commande de cette session). Lève
+   * `SessionArchiveeNonModifiable` si la session est gelée.
+   */
+  assertModifiable(): void {
+    if (this._archivee) {
+      throw new SessionArchiveeNonModifiable(this.id);
+    }
   }
 
   /**
@@ -161,6 +209,7 @@ export class Session {
     ajoutes: number[];
     retires: number[];
   } {
+    this.assertModifiable();
     const anciens = new Set(this._photos.map((p) => p.numero));
     const nouveaux = new Set<number>();
     for (const n of numeros) {
@@ -225,6 +274,7 @@ export class Session {
    * montant au moment de sa création (pattern "snapshot" en DDD).
    */
   modifierPrix(format: Format, montant: Montant): void {
+    this.assertModifiable();
     this._grilleTarifaire = this._grilleTarifaire.avecPrixModifie(
       format,
       montant,
@@ -242,6 +292,7 @@ export class Session {
     email?: string;
     telephone?: string;
   }): Acheteur {
+    this.assertModifiable();
     const nomCible = normaliserNom(params.nom);
     if (this._acheteurs.some((a) => normaliserNom(a.nom) === nomCible)) {
       throw new NomAcheteurDejaUtiliseDansSession(params.nom.trim());
@@ -261,6 +312,7 @@ export class Session {
    * source, un futur use case `RescannerDossierSource` sera nécessaire.
    */
   modifierInfos(params: InfosSession): void {
+    this.assertModifiable();
     const infos = validerInfos(params);
     this.commanditaire = infos.commanditaire;
     this.referent = infos.referent;
@@ -285,6 +337,7 @@ export class Session {
     acheteurId: string,
     params: { nom: string; email?: string; telephone?: string },
   ): Acheteur {
+    this.assertModifiable();
     const index = this._acheteurs.findIndex((a) => a.id === acheteurId);
     if (index === -1) {
       throw new AcheteurIntrouvableDansSession(acheteurId);

@@ -1,6 +1,8 @@
 import { AjouterAcheteurASessionUseCase } from "@/domain/usecases/AjouterAcheteurASession";
 import { AjouterTirageACommandeUseCase } from "@/domain/usecases/AjouterTirageACommande";
+import { ArchiverSessionUseCase } from "@/domain/usecases/ArchiverSession";
 import { ControlerCoherenceSessionUseCase } from "@/domain/usecases/ControlerCoherenceSession";
+import { DesarchiverSessionUseCase } from "@/domain/usecases/DesarchiverSession";
 import { CreerSessionUseCase } from "@/domain/usecases/CreerSession";
 import { ExporterCommandeUseCase } from "@/domain/usecases/ExporterCommande";
 import { ExporterSauvegardeUseCase } from "@/domain/usecases/ExporterSauvegarde";
@@ -79,6 +81,7 @@ export const container = {
   ),
   retirerTirageDeCommande: new RetirerTirageDeCommandeUseCase(
     commandeRepository,
+    sessionRepository,
   ),
   listerCommandesDeSession: new ListerCommandesDeSessionUseCase(
     commandeRepository,
@@ -86,9 +89,13 @@ export const container = {
   exporterCommande,
   exporterSession: new ExporterSessionUseCase(
     commandeRepository,
+    sessionRepository,
     exporterCommande,
   ),
-  supprimerCommande: new SupprimerCommandeUseCase(commandeRepository),
+  supprimerCommande: new SupprimerCommandeUseCase(
+    commandeRepository,
+    sessionRepository,
+  ),
 
   controlerCoherenceSession: new ControlerCoherenceSessionUseCase(
     sessionRepository,
@@ -110,6 +117,13 @@ export const container = {
     fileLister,
     fileRemover,
   ),
+  archiverSession: new ArchiverSessionUseCase(
+    sessionRepository,
+    commandeRepository,
+    fileLister,
+    fileRemover,
+  ),
+  desarchiverSession: new DesarchiverSessionUseCase(sessionRepository),
 
   exporterSauvegarde: new ExporterSauvegardeUseCase(
     sessionRepository,

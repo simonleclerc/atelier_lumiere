@@ -1,11 +1,42 @@
 import { describe, it, expect } from "vitest";
 import { Commande, TirageIntrouvable } from "../entities/Commande";
+import { Session, SessionArchiveeNonModifiable } from "../entities/Session";
 import {
   CommandeIntrouvable,
   type CommandeRepository,
 } from "../ports/CommandeRepository";
+import {
+  SessionIntrouvable,
+  type SessionRepository,
+} from "../ports/SessionRepository";
+import { CheminDossier } from "../value-objects/CheminDossier";
 import { Format } from "../value-objects/Format";
+import { GrilleTarifaire } from "../value-objects/GrilleTarifaire";
+import { Montant } from "../value-objects/Montant";
 import { RetirerTirageDeCommandeUseCase } from "./RetirerTirageDeCommande";
+
+function grille(): GrilleTarifaire {
+  return new GrilleTarifaire([
+    [Format._15x23, new Montant(800)],
+    [Format._20x30, new Montant(1200)],
+    [Format._30x45, new Montant(1800)],
+    [Format.NUMERIQUE, new Montant(500)],
+  ]);
+}
+
+function sessionDemo(id: string = "s"): Session {
+  return Session.creer({
+    id,
+    commanditaire: "X",
+    referent: "Y",
+    date: new Date("2026-04-01"),
+    type: "Spectacle",
+    dossierSource: new CheminDossier("/src"),
+    dossierExport: new CheminDossier("/exp"),
+    grilleTarifaire: grille(),
+    photoNumeros: [1, 2],
+  });
+}
 
 class InMemoryCommandeRepo implements CommandeRepository {
   readonly map = new Map<string, Commande>();
@@ -47,9 +78,38 @@ class InMemoryCommandeRepo implements CommandeRepository {
   }
 }
 
+class InMemorySessionRepo implements SessionRepository {
+  readonly map = new Map<string, Session>();
+  constructor(initial: Session[] = []) {
+    initial.forEach((s) => this.map.set(s.id, s));
+  }
+  async save(s: Session): Promise<void> {
+    this.map.set(s.id, s);
+  }
+  async findById(id: string): Promise<Session> {
+    const s = this.map.get(id);
+    if (!s) throw new SessionIntrouvable(id);
+    return s;
+  }
+  async findAll(): Promise<readonly Session[]> {
+    return Array.from(this.map.values());
+  }
+  async delete(id: string): Promise<void> {
+    this.map.delete(id);
+  }
+  async replaceAll(sessions: readonly Session[]): Promise<void> {
+    this.map.clear();
+    sessions.forEach((s) => this.map.set(s.id, s));
+  }
+}
+
 describe("RetirerTirageDeCommandeUseCase", () => {
   it("retire un tirage parmi plusieurs — la commande est sauvée", async () => {
-    const commande = Commande.creer({ sessionId: "s", acheteurId: "a" });
+    const session = sessionDemo();
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: "a",
+    });
     const t1 = commande.ajouterTirage({
       photoNumero: 1,
       format: Format._20x30,
@@ -60,8 +120,9 @@ describe("RetirerTirageDeCommandeUseCase", () => {
       format: Format._20x30,
       quantite: 1,
     });
-    const repo = new InMemoryCommandeRepo([commande]);
-    const useCase = new RetirerTirageDeCommandeUseCase(repo);
+    const cRepo = new InMemoryCommandeRepo([commande]);
+    const sRepo = new InMemorySessionRepo([session]);
+    const useCase = new RetirerTirageDeCommandeUseCase(cRepo, sRepo);
 
     const { commandeSupprimee } = await useCase.execute({
       commandeId: commande.id,
@@ -69,19 +130,24 @@ describe("RetirerTirageDeCommandeUseCase", () => {
     });
 
     expect(commandeSupprimee).toBe(false);
-    const rechargee = await repo.findById(commande.id);
+    const rechargee = await cRepo.findById(commande.id);
     expect(rechargee.tirages).toHaveLength(1);
   });
 
   it("supprime la commande quand le dernier tirage est retiré", async () => {
-    const commande = Commande.creer({ sessionId: "s", acheteurId: "a" });
+    const session = sessionDemo();
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: "a",
+    });
     const t = commande.ajouterTirage({
       photoNumero: 1,
       format: Format._20x30,
       quantite: 1,
     });
-    const repo = new InMemoryCommandeRepo([commande]);
-    const useCase = new RetirerTirageDeCommandeUseCase(repo);
+    const cRepo = new InMemoryCommandeRepo([commande]);
+    const sRepo = new InMemorySessionRepo([session]);
+    const useCase = new RetirerTirageDeCommandeUseCase(cRepo, sRepo);
 
     const { commandeSupprimee } = await useCase.execute({
       commandeId: commande.id,
@@ -89,21 +155,48 @@ describe("RetirerTirageDeCommandeUseCase", () => {
     });
 
     expect(commandeSupprimee).toBe(true);
-    expect(repo.map.has(commande.id)).toBe(false);
+    expect(cRepo.map.has(commande.id)).toBe(false);
   });
 
   it("remonte TirageIntrouvable si l'id est inconnu", async () => {
-    const commande = Commande.creer({ sessionId: "s", acheteurId: "a" });
+    const session = sessionDemo();
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: "a",
+    });
     commande.ajouterTirage({
       photoNumero: 1,
       format: Format._20x30,
       quantite: 1,
     });
-    const repo = new InMemoryCommandeRepo([commande]);
-    const useCase = new RetirerTirageDeCommandeUseCase(repo);
+    const cRepo = new InMemoryCommandeRepo([commande]);
+    const sRepo = new InMemorySessionRepo([session]);
+    const useCase = new RetirerTirageDeCommandeUseCase(cRepo, sRepo);
 
     await expect(
       useCase.execute({ commandeId: commande.id, tirageId: "inconnu" }),
     ).rejects.toBeInstanceOf(TirageIntrouvable);
+  });
+
+  it("refuse de retirer un tirage si la session est archivée", async () => {
+    const session = sessionDemo();
+    const commande = Commande.creer({
+      sessionId: session.id,
+      acheteurId: "a",
+    });
+    const t = commande.ajouterTirage({
+      photoNumero: 1,
+      format: Format._20x30,
+      quantite: 1,
+    });
+    session.archiver();
+    const useCase = new RetirerTirageDeCommandeUseCase(
+      new InMemoryCommandeRepo([commande]),
+      new InMemorySessionRepo([session]),
+    );
+
+    await expect(
+      useCase.execute({ commandeId: commande.id, tirageId: t.id }),
+    ).rejects.toBeInstanceOf(SessionArchiveeNonModifiable);
   });
 });
