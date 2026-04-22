@@ -202,9 +202,9 @@ describe("ModifierAcheteurUseCase", () => {
     });
 
     const fichiersAvant = [
-      "/b/15x23/martin_1_1.jpg",
-      "/b/15x23/martin_1_2.jpg",
-      "/b/20x30/martin_2_1.jpg",
+      "/b/15x23/martin1.1.1.jpg",
+      "/b/15x23/martin2.1.2.jpg",
+      "/b/20x30/martin3.2.1.jpg",
     ];
     const sessions = new InMemorySessionRepo([session]);
     const commandes = new InMemoryCommandeRepo([commande]);
@@ -219,9 +219,9 @@ describe("ModifierAcheteurUseCase", () => {
 
     expect(fichiersRenommes).toBe(3);
     expect([...fs.fichiers].sort()).toEqual([
-      "/b/15x23/martin_dupont_1_1.jpg",
-      "/b/15x23/martin_dupont_1_2.jpg",
-      "/b/20x30/martin_dupont_2_1.jpg",
+      "/b/15x23/martin_dupont1.1.1.jpg",
+      "/b/15x23/martin_dupont2.1.2.jpg",
+      "/b/20x30/martin_dupont3.2.1.jpg",
     ]);
   });
 
@@ -239,7 +239,7 @@ describe("ModifierAcheteurUseCase", () => {
 
     const sessions = new InMemorySessionRepo([session]);
     const commandes = new InMemoryCommandeRepo([commande]);
-    const fs = new FakeFileRenamer(["/b/15x23/martin_1_1.jpg"]);
+    const fs = new FakeFileRenamer(["/b/15x23/martin1.1.1.jpg"]);
     const useCase = new ModifierAcheteurUseCase(sessions, commandes, fs);
 
     const { fichiersRenommes } = await useCase.execute({
@@ -250,7 +250,7 @@ describe("ModifierAcheteurUseCase", () => {
 
     expect(fichiersRenommes).toBe(0);
     expect(fs.appels).toHaveLength(0);
-    expect(fs.fichiers.has("/b/15x23/martin_1_1.jpg")).toBe(true);
+    expect(fs.fichiers.has("/b/15x23/martin1.1.1.jpg")).toBe(true);
   });
 
   it("reste best-effort si les fichiers sont absents (commande jamais exportée)", async () => {
@@ -285,7 +285,7 @@ describe("ModifierAcheteurUseCase", () => {
     const { session, acheteur } = setup();
     const sessions = new InMemorySessionRepo([session]);
     const commandes = new InMemoryCommandeRepo();
-    const fs = new FakeFileRenamer(["/b/15x23/martin_1_1.jpg"]);
+    const fs = new FakeFileRenamer(["/b/15x23/martin1.1.1.jpg"]);
     const useCase = new ModifierAcheteurUseCase(sessions, commandes, fs);
 
     const { fichiersRenommes } = await useCase.execute({

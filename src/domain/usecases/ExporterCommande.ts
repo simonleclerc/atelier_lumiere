@@ -15,7 +15,9 @@ import { AcheteurNAppartientPasASession } from "./erreurs-cross-aggregate";
  *
  * La photo source du dossier source de la session est copiée dans
  * `dossierExport/{format}/` en N exemplaires (N = quantité), renommés
- * `{acheteur}_{photo}_{i}.jpg`.
+ * `{slug}{indexGlobal}.{photo}.{i}.jpg` (voir
+ * `Commande.nomsFichiersExport` pour la sémantique des trois
+ * segments numériques).
  *
  * Idempotent : relancer l'export réécrase les mêmes fichiers. En plus, un
  * ré-export **nettoie les orphelins** — les fichiers sur disque qui

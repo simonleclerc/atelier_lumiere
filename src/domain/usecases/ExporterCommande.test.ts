@@ -192,19 +192,19 @@ describe("ExporterCommandeUseCase", () => {
     expect(copier.copies).toEqual([
       {
         source: "/Users/copain/src/145.jpg",
-        destination: "/Users/copain/export/20x30/martin_dupont_145_1.jpg",
+        destination: "/Users/copain/export/20x30/martin_dupont1.145.1.jpg",
       },
       {
         source: "/Users/copain/src/145.jpg",
-        destination: "/Users/copain/export/20x30/martin_dupont_145_2.jpg",
+        destination: "/Users/copain/export/20x30/martin_dupont2.145.2.jpg",
       },
       {
         source: "/Users/copain/src/145.jpg",
-        destination: "/Users/copain/export/20x30/martin_dupont_145_3.jpg",
+        destination: "/Users/copain/export/20x30/martin_dupont3.145.3.jpg",
       },
       {
         source: "/Users/copain/src/1.jpg",
-        destination: "/Users/copain/export/Numerique/martin_dupont_1_1.jpg",
+        destination: "/Users/copain/export/Numerique/martin_dupont4.1.1.jpg",
       },
     ]);
   });
@@ -283,26 +283,26 @@ describe("ExporterCommandeUseCase", () => {
       const { useCase, fs } = monter([commande], [session]);
       // Simule un export précédent avec un tirage photo=300 format=15x23
       // qui a été retiré depuis.
-      fs.ajouter("/Users/copain/export/15x23", "martin_dupont_300_1.jpg");
-      fs.ajouter("/Users/copain/export/15x23", "martin_dupont_300_2.jpg");
+      fs.ajouter("/Users/copain/export/15x23", "martin_dupont5.300.1.jpg");
+      fs.ajouter("/Users/copain/export/15x23", "martin_dupont6.300.2.jpg");
       // Et un vieux fichier pour photo=145 en format abandonné (30x45)
-      fs.ajouter("/Users/copain/export/30x45", "martin_dupont_145_1.jpg");
+      fs.ajouter("/Users/copain/export/30x45", "martin_dupont7.145.1.jpg");
 
       const r = await useCase.execute({ commandeId: commande.id });
 
       expect(r.orphelinsSupprimes).toBe(3);
       expect([...fs.suppressions].sort()).toEqual([
-        "/Users/copain/export/15x23/martin_dupont_300_1.jpg",
-        "/Users/copain/export/15x23/martin_dupont_300_2.jpg",
-        "/Users/copain/export/30x45/martin_dupont_145_1.jpg",
+        "/Users/copain/export/15x23/martin_dupont5.300.1.jpg",
+        "/Users/copain/export/15x23/martin_dupont6.300.2.jpg",
+        "/Users/copain/export/30x45/martin_dupont7.145.1.jpg",
       ]);
     });
 
     it("ne touche pas aux fichiers d'autres acheteurs", async () => {
       const { session, commande } = setup();
       const { useCase, fs } = monter([commande], [session]);
-      fs.ajouter("/Users/copain/export/20x30", "alice_145_1.jpg");
-      fs.ajouter("/Users/copain/export/20x30", "bob_dupont_145_1.jpg");
+      fs.ajouter("/Users/copain/export/20x30", "alice1.145.1.jpg");
+      fs.ajouter("/Users/copain/export/20x30", "bob_dupont1.145.1.jpg");
 
       const r = await useCase.execute({ commandeId: commande.id });
 
@@ -333,26 +333,31 @@ describe("ExporterCommandeUseCase", () => {
       });
       const { useCase, fs } = monter([cmd], [session]);
       // Fichier d'un AUTRE acheteur "Martin Dupont" en ré-export
-      fs.ajouter("/b/15x23", "martin_dupont_1_1.jpg");
+      fs.ajouter("/b/15x23", "martin_dupont1.1.1.jpg");
       // Fichier de Martin lui-même, orphelin (photo retirée fictive)
-      fs.ajouter("/b/15x23", "martin_2_1.jpg");
+      fs.ajouter("/b/15x23", "martin2.2.1.jpg");
 
       const r = await useCase.execute({ commandeId: cmd.id });
 
       expect(r.orphelinsSupprimes).toBe(1);
-      expect(fs.suppressions).toEqual(["/b/15x23/martin_2_1.jpg"]);
-      // martin_dupont_* est resté
-      expect(fs.dossiers.get("/b/15x23")?.has("martin_dupont_1_1.jpg")).toBe(
+      expect(fs.suppressions).toEqual(["/b/15x23/martin2.2.1.jpg"]);
+      // martin_dupont1.1.1.jpg est resté
+      expect(fs.dossiers.get("/b/15x23")?.has("martin_dupont1.1.1.jpg")).toBe(
         true,
       );
     });
 
-    it("ignore les fichiers hors convention (.DS_Store, autres extensions)", async () => {
+    it("ignore les fichiers hors convention (.DS_Store, autres extensions, ancien format)", async () => {
       const { session, commande } = setup();
       const { useCase, fs } = monter([commande], [session]);
       fs.ajouter("/Users/copain/export/20x30", ".DS_Store");
-      fs.ajouter("/Users/copain/export/20x30", "martin_dupont_145_1.png");
+      fs.ajouter("/Users/copain/export/20x30", "martin_dupont1.145.1.png");
       fs.ajouter("/Users/copain/export/20x30", "notes.txt");
+      // Ancien format avec underscores : intentionnellement NON reconnu
+      // comme orphelin par la nouvelle convention — un coup de
+      // nettoyage manuel est attendu si l'utilisateur a d'anciens
+      // exports.
+      fs.ajouter("/Users/copain/export/20x30", "martin_dupont_145_1.jpg");
 
       const r = await useCase.execute({ commandeId: commande.id });
 

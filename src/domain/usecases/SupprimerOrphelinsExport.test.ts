@@ -131,9 +131,9 @@ describe("SupprimerOrphelinsExportUseCase", () => {
       quantite: 1,
     });
     const fs = new FakeFileRemover([
-      "/exp/15x23/martin_1_1.jpg", // attendu — ne doit PAS être supprimé
-      "/exp/15x23/martin_2_1.jpg", // orphelin
-      "/exp/20x30/alice_5_1.jpg", // orphelin (ancien acheteur)
+      "/exp/15x23/martin1.1.1.jpg", // attendu — ne doit PAS être supprimé
+      "/exp/15x23/martin2.2.1.jpg", // orphelin
+      "/exp/20x30/alice3.5.1.jpg", // orphelin (ancien acheteur)
     ]);
     const useCase = new SupprimerOrphelinsExportUseCase(
       new InMemorySessionRepo([session]),
@@ -144,14 +144,14 @@ describe("SupprimerOrphelinsExportUseCase", () => {
     const r = await useCase.execute({
       sessionId: session.id,
       cheminsAbsolus: [
-        "/exp/15x23/martin_2_1.jpg",
-        "/exp/20x30/alice_5_1.jpg",
+        "/exp/15x23/martin2.2.1.jpg",
+        "/exp/20x30/alice3.5.1.jpg",
       ],
     });
 
     expect(r.fichiersSupprimes).toBe(2);
     expect(r.ignoresCarAttendus).toBe(0);
-    expect(fs.fichiers.has("/exp/15x23/martin_1_1.jpg")).toBe(true);
+    expect(fs.fichiers.has("/exp/15x23/martin1.1.1.jpg")).toBe(true);
   });
 
   it("ignore un chemin redevenu attendu entre le rapport et le clic", async () => {
@@ -161,13 +161,13 @@ describe("SupprimerOrphelinsExportUseCase", () => {
       sessionId: session.id,
       acheteurId: acheteur.id,
     });
-    // La commande référence maintenant martin_2_1.jpg — le rapport était stale.
+    // La commande référence maintenant martin1.2.1.jpg — le rapport était stale.
     commande.ajouterTirage({
       photoNumero: 2,
       format: Format._15x23,
       quantite: 1,
     });
-    const fs = new FakeFileRemover(["/exp/15x23/martin_2_1.jpg"]);
+    const fs = new FakeFileRemover(["/exp/15x23/martin1.2.1.jpg"]);
     const useCase = new SupprimerOrphelinsExportUseCase(
       new InMemorySessionRepo([session]),
       new InMemoryCommandeRepo([commande]),
@@ -176,7 +176,7 @@ describe("SupprimerOrphelinsExportUseCase", () => {
 
     const r = await useCase.execute({
       sessionId: session.id,
-      cheminsAbsolus: ["/exp/15x23/martin_2_1.jpg"],
+      cheminsAbsolus: ["/exp/15x23/martin1.2.1.jpg"],
     });
 
     expect(r.fichiersSupprimes).toBe(0);
@@ -202,7 +202,7 @@ describe("SupprimerOrphelinsExportUseCase", () => {
 
   it("retourne 0 sans effet de bord si la liste est vide", async () => {
     const session = sessionBase();
-    const fs = new FakeFileRemover(["/exp/15x23/martin_1_1.jpg"]);
+    const fs = new FakeFileRemover(["/exp/15x23/martin1.1.1.jpg"]);
     const useCase = new SupprimerOrphelinsExportUseCase(
       new InMemorySessionRepo([session]),
       new InMemoryCommandeRepo(),
@@ -230,7 +230,7 @@ describe("SupprimerOrphelinsExportUseCase", () => {
 
     const r = await useCase.execute({
       sessionId: session.id,
-      cheminsAbsolus: ["/exp/15x23/martin_1_1.jpg"],
+      cheminsAbsolus: ["/exp/15x23/martin1.1.1.jpg"],
     });
 
     expect(r.fichiersSupprimes).toBe(0);

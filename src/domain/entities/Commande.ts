@@ -219,8 +219,18 @@ export class Commande {
   /**
    * Produit les instructions d'export pour tous les tirages de la
    * commande, à plat. Pour chaque tirage, une entrée par exemplaire
-   * (selon la quantité), nommée `{acheteur}_{photo}_{i}.jpg` dans le
-   * sous-dossier correspondant au format.
+   * (selon la quantité), nommée
+   * `{slug}{indexGlobal}.{photoNumero}.{exemplaireDansTirage}.jpg`
+   * dans le sous-dossier correspondant au format.
+   *
+   * Trois segments numériques, séparés par des points :
+   *  - `indexGlobal` — compteur plat sur TOUS les exemplaires de la
+   *    commande (ordre d'insertion des tirages × quantité). Permet de
+   *    voir d'un coup d'œil combien de tirages un acheteur a commandés.
+   *  - `photoNumero` — identifiant de la photo source.
+   *  - `exemplaireDansTirage` — compteur local au tirage (1..quantite),
+   *    qui repart à 1 dans chaque tirage même si la photoNumero est la
+   *    même (cas d'une photo commandée dans deux formats différents).
    *
    * Méthode PURE — le use case ExporterCommande orchestre les copies
    * réelles à partir de ces instructions.
@@ -236,12 +246,14 @@ export class Commande {
       nomFichier: string;
       photoNumero: number;
     }> = [];
+    let indexGlobal = 0;
     for (const tirage of this._tirages) {
       const sousDossier = tirage.format.toDossierName();
       for (let i = 0; i < tirage.quantite; i += 1) {
+        indexGlobal += 1;
         instructions.push({
           sousDossier,
-          nomFichier: `${slug}_${tirage.photoNumero}_${i + 1}.jpg`,
+          nomFichier: `${slug}${indexGlobal}.${tirage.photoNumero}.${i + 1}.jpg`,
           photoNumero: tirage.photoNumero,
         });
       }
@@ -253,41 +265,59 @@ export class Commande {
 /**
  * Prédicat pur — est-ce qu'un nom de fichier (sans chemin) correspond
  * au pattern d'export pour le slug donné ? Encapsule la convention de
- * nommage `{slug}_{photoNumero}_{i}.jpg` pour que les use cases puissent
- * filtrer le contenu d'un dossier sans la redupliquer.
+ * nommage `{slug}{indexGlobal}.{photoNumero}.{exemplaire}.jpg` pour
+ * que les use cases puissent filtrer le contenu d'un dossier sans la
+ * redupliquer.
  *
- * Match STRICT : "martin" ne matche PAS "martin_dupont_1_1.jpg" car la
- * suite attendue est `_<digits>_<digits>.jpg`, pas un segment de slug.
+ * Match STRICT : "martin" ne matche PAS "martin_dupont47.1.1.jpg" car
+ * après le slug on attend immédiatement des chiffres (pas `_dupont`).
+ *
+ * Limite connue : si deux acheteurs ont des slugs où l'un est préfixe
+ * de l'autre AVEC un suffixe numérique (ex : "martin" et "martin2"),
+ * le fichier "martin247.1.1.jpg" matche les deux slugs. En pratique
+ * le slugifier normalise les espaces en underscore, donc "Martin 2"
+ * devient "martin_2" et la collision ne survient que si un nom humain
+ * contient un chiffre collé à des lettres — cas très rare.
  */
 export function estFichierExportDeSlug(
   nomFichier: string,
   slug: string,
 ): boolean {
   const slugEchappe = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(`^${slugEchappe}_\\d+_\\d+\\.jpg$`);
+  const regex = new RegExp(`^${slugEchappe}\\d+\\.\\d+\\.\\d+\\.jpg$`);
   return regex.test(nomFichier);
 }
 
 /**
  * Parsing inverse de la convention d'export : depuis un nom de fichier
- * `{slug}_{photoNumero}_{i}.jpg`, extrait ses trois composants. Retourne
- * `null` si le nom ne suit pas la convention (fichier hors scope, ex :
- * `.DS_Store`, `notes.txt`, `martin_abc.jpg`).
+ * `{slug}{indexGlobal}.{photoNumero}.{exemplaire}.jpg`, extrait ses
+ * quatre composants. Retourne `null` si le nom ne suit pas la
+ * convention (fichier hors scope, ex : `.DS_Store`, `notes.txt`,
+ * `martin_abc.jpg`).
  *
  * Utilisé par le contrôle de cohérence pour inspecter les fichiers
  * orphelins du dossier export sans avoir à connaître la liste des
- * slugs en amont.
+ * slugs en amont. Le `.+?` non-greedy prend le slug le plus court
+ * possible, laissant un maximum de chiffres à `indexGlobal` — choix
+ * arbitraire en cas d'ambiguïté (slug terminant par un chiffre).
  */
 export function parserNomFichierExport(
   nomFichier: string,
-): { slug: string; photoNumero: number; exemplaire: number } | null {
-  const match = /^(.+)_(\d+)_(\d+)\.jpg$/.exec(nomFichier);
+): {
+  slug: string;
+  indexGlobal: number;
+  photoNumero: number;
+  exemplaire: number;
+} | null {
+  const match = /^(.+?)(\d+)\.(\d+)\.(\d+)\.jpg$/.exec(nomFichier);
   if (!match) return null;
-  const photoNumero = Number.parseInt(match[2], 10);
-  const exemplaire = Number.parseInt(match[3], 10);
+  const indexGlobal = Number.parseInt(match[2], 10);
+  const photoNumero = Number.parseInt(match[3], 10);
+  const exemplaire = Number.parseInt(match[4], 10);
+  if (!Number.isInteger(indexGlobal) || indexGlobal < 1) return null;
   if (!Number.isInteger(photoNumero) || photoNumero < 1) return null;
   if (!Number.isInteger(exemplaire) || exemplaire < 1) return null;
-  return { slug: match[1], photoNumero, exemplaire };
+  return { slug: match[1], indexGlobal, photoNumero, exemplaire };
 }
 
 /**

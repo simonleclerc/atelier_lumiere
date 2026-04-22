@@ -232,7 +232,7 @@ describe("Commande (agrégat racine avec tirages)", () => {
   });
 
   describe("nomsFichiersExport", () => {
-    it("produit une instruction par exemplaire, dans le sous-dossier du format", () => {
+    it("produit une instruction par exemplaire, avec indexGlobal plat et compteur par tirage", () => {
       const c = commandeDemo();
       c.ajouterTirage({
         photoNumero: 145,
@@ -248,19 +248,39 @@ describe("Commande (agrégat racine avec tirages)", () => {
       expect(instructions).toEqual([
         {
           sousDossier: "20x30",
-          nomFichier: "martin_dupont_145_1.jpg",
+          nomFichier: "martin_dupont1.145.1.jpg",
           photoNumero: 145,
         },
         {
           sousDossier: "20x30",
-          nomFichier: "martin_dupont_145_2.jpg",
+          nomFichier: "martin_dupont2.145.2.jpg",
           photoNumero: 145,
         },
         {
           sousDossier: "Numerique",
-          nomFichier: "martin_dupont_7_1.jpg",
+          nomFichier: "martin_dupont3.7.1.jpg",
           photoNumero: 7,
         },
+      ]);
+    });
+
+    it("exemplaireDansTirage repart à 1 pour une même photo commandée dans deux formats", () => {
+      const c = commandeDemo();
+      c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._15x23,
+        quantite: 2,
+      });
+      c.ajouterTirage({
+        photoNumero: 145,
+        format: Format._20x30,
+        quantite: 1,
+      });
+      const instructions = c.nomsFichiersExport("Martin");
+      expect(instructions.map((i) => i.nomFichier)).toEqual([
+        "martin1.145.1.jpg",
+        "martin2.145.2.jpg",
+        "martin3.145.1.jpg",
       ]);
     });
   });
@@ -385,43 +405,50 @@ describe("slugifierNomAcheteur", () => {
 });
 
 describe("estFichierExportDeSlug", () => {
-  it("matche {slug}_{photo}_{i}.jpg", () => {
-    expect(estFichierExportDeSlug("martin_145_1.jpg", "martin")).toBe(true);
-    expect(estFichierExportDeSlug("martin_dupont_1_12.jpg", "martin_dupont"))
-      .toBe(true);
+  it("matche {slug}{n}.{photo}.{i}.jpg", () => {
+    expect(estFichierExportDeSlug("martin47.145.1.jpg", "martin")).toBe(true);
+    expect(
+      estFichierExportDeSlug("martin_dupont3.1.12.jpg", "martin_dupont"),
+    ).toBe(true);
   });
 
   it("rejette un slug qui est préfixe d'un autre (évite les faux positifs)", () => {
-    expect(estFichierExportDeSlug("martin_dupont_1_1.jpg", "martin")).toBe(
+    expect(estFichierExportDeSlug("martin_dupont1.1.1.jpg", "martin")).toBe(
       false,
     );
   });
 
   it("rejette les fichiers hors convention", () => {
-    expect(estFichierExportDeSlug("martin_145_1.png", "martin")).toBe(false);
-    expect(estFichierExportDeSlug("martin_145.jpg", "martin")).toBe(false);
+    expect(estFichierExportDeSlug("martin1.145.1.png", "martin")).toBe(false);
+    expect(estFichierExportDeSlug("martin1.145.jpg", "martin")).toBe(false);
     expect(estFichierExportDeSlug(".DS_Store", "martin")).toBe(false);
+    // ancien format avec underscores : plus reconnu
+    expect(estFichierExportDeSlug("martin_145_1.jpg", "martin")).toBe(false);
   });
 });
 
 describe("parserNomFichierExport", () => {
-  it("extrait slug, photoNumero, exemplaire", () => {
-    expect(parserNomFichierExport("martin_145_1.jpg")).toEqual({
+  it("extrait slug, indexGlobal, photoNumero, exemplaire", () => {
+    expect(parserNomFichierExport("martin47.145.1.jpg")).toEqual({
       slug: "martin",
+      indexGlobal: 47,
       photoNumero: 145,
       exemplaire: 1,
     });
-    expect(parserNomFichierExport("martin_dupont_3_12.jpg")).toEqual({
+    expect(parserNomFichierExport("martin_dupont3.12.5.jpg")).toEqual({
       slug: "martin_dupont",
-      photoNumero: 3,
-      exemplaire: 12,
+      indexGlobal: 3,
+      photoNumero: 12,
+      exemplaire: 5,
     });
   });
 
   it("retourne null sur les fichiers hors convention", () => {
     expect(parserNomFichierExport(".DS_Store")).toBeNull();
-    expect(parserNomFichierExport("martin_145.jpg")).toBeNull();
-    expect(parserNomFichierExport("martin_abc_1.jpg")).toBeNull();
-    expect(parserNomFichierExport("martin_145_1.png")).toBeNull();
+    expect(parserNomFichierExport("martin1.145.jpg")).toBeNull();
+    expect(parserNomFichierExport("martin_abc.1.1.jpg")).toBeNull();
+    expect(parserNomFichierExport("martin1.145.1.png")).toBeNull();
+    // ancien format avec underscores : plus reconnu
+    expect(parserNomFichierExport("martin_145_1.jpg")).toBeNull();
   });
 });

@@ -131,7 +131,7 @@ describe("ControlerCoherenceSessionUseCase", () => {
     const fs = new FakeFileLister();
     fs.ajouter("/src", "1.jpg");
     fs.ajouter("/src", "2.jpg");
-    fs.ajouter("/exp/15x23", "martin_1_1.jpg");
+    fs.ajouter("/exp/15x23", "martin1.1.1.jpg");
 
     const useCase = new ControlerCoherenceSessionUseCase(
       new InMemorySessionRepo([session]),
@@ -168,7 +168,7 @@ describe("ControlerCoherenceSessionUseCase", () => {
     });
     const fs = new FakeFileLister();
     fs.ajouter("/src", "2.jpg"); // 1.jpg absent
-    fs.ajouter("/exp/15x23", "martin_2_1.jpg");
+    fs.ajouter("/exp/15x23", "martin3.2.1.jpg");
 
     const useCase = new ControlerCoherenceSessionUseCase(
       new InMemorySessionRepo([session]),
@@ -197,12 +197,12 @@ describe("ControlerCoherenceSessionUseCase", () => {
     commande.ajouterTirage({
       photoNumero: 1,
       format: Format._15x23,
-      quantite: 2, // attend 2 fichiers : martin_1_1.jpg + martin_1_2.jpg
+      quantite: 2, // attend 2 fichiers : martin1.1.1.jpg + martin2.1.2.jpg
     });
     const fs = new FakeFileLister();
     fs.ajouter("/src", "1.jpg");
-    fs.ajouter("/exp/15x23", "martin_1_1.jpg");
-    // martin_1_2.jpg manque
+    fs.ajouter("/exp/15x23", "martin1.1.1.jpg");
+    // martin2.1.2.jpg manque
 
     const useCase = new ControlerCoherenceSessionUseCase(
       new InMemorySessionRepo([session]),
@@ -239,7 +239,7 @@ describe("ControlerCoherenceSessionUseCase", () => {
     });
     const fs = new FakeFileLister();
     fs.ajouter("/src", "1.jpg"); // 2.jpg absent = photo 2 fantôme
-    fs.ajouter("/exp/15x23", "martin_1_1.jpg");
+    fs.ajouter("/exp/15x23", "martin1.1.1.jpg");
 
     const useCase = new ControlerCoherenceSessionUseCase(
       new InMemorySessionRepo([session]),
@@ -268,9 +268,9 @@ describe("ControlerCoherenceSessionUseCase", () => {
     const fs = new FakeFileLister();
     fs.ajouter("/src", "1.jpg");
     fs.ajouter("/src", "2.jpg");
-    fs.ajouter("/exp/15x23", "martin_1_1.jpg"); // attendu
-    fs.ajouter("/exp/15x23", "martin_2_1.jpg"); // orphelin (tirage retiré)
-    fs.ajouter("/exp/20x30", "alice_5_1.jpg"); // orphelin (acheteur supprimé)
+    fs.ajouter("/exp/15x23", "martin1.1.1.jpg"); // attendu
+    fs.ajouter("/exp/15x23", "martin2.2.1.jpg"); // orphelin (tirage retiré)
+    fs.ajouter("/exp/20x30", "alice3.5.1.jpg"); // orphelin (acheteur supprimé)
 
     const useCase = new ControlerCoherenceSessionUseCase(
       new InMemorySessionRepo([session]),
@@ -282,16 +282,16 @@ describe("ControlerCoherenceSessionUseCase", () => {
     expect(r.orphelinsExport).toHaveLength(2);
     const cibles = r.orphelinsExport.map((o) => o.cheminAbsolu).sort();
     expect(cibles).toEqual([
-      "/exp/15x23/martin_2_1.jpg",
-      "/exp/20x30/alice_5_1.jpg",
+      "/exp/15x23/martin2.2.1.jpg",
+      "/exp/20x30/alice3.5.1.jpg",
     ]);
     // Slug "martin" matche l'acheteur existant ; "alice" non.
     const martin = r.orphelinsExport.find(
-      (o) => o.nomFichier === "martin_2_1.jpg",
+      (o) => o.nomFichier === "martin2.2.1.jpg",
     );
     expect(martin?.acheteurIdConnu).toBe(acheteurId);
     const alice = r.orphelinsExport.find(
-      (o) => o.nomFichier === "alice_5_1.jpg",
+      (o) => o.nomFichier === "alice3.5.1.jpg",
     );
     expect(alice?.acheteurIdConnu).toBeNull();
   });
@@ -309,7 +309,7 @@ describe("ControlerCoherenceSessionUseCase", () => {
     });
     const fs = new FakeFileLister();
     fs.ajouter("/src", "1.jpg");
-    fs.ajouter("/exp/15x23", "martin_1_1.jpg");
+    fs.ajouter("/exp/15x23", "martin1.1.1.jpg");
     fs.ajouter("/exp/15x23", ".DS_Store");
     fs.ajouter("/exp/15x23", "notes.txt");
     fs.ajouter("/exp/15x23", "bizarre.jpg");
@@ -341,7 +341,7 @@ describe("ControlerCoherenceSessionUseCase", () => {
     fs.ajouter("/src", "1.jpg");
     fs.ajouter("/src", "2.jpg");
     fs.ajouter("/src", "3.jpg");
-    fs.ajouter("/exp/15x23", "martin_2_1.jpg");
+    fs.ajouter("/exp/15x23", "martin1.2.1.jpg");
 
     const useCase = new ControlerCoherenceSessionUseCase(
       new InMemorySessionRepo([session]),

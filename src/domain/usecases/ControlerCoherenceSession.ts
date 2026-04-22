@@ -22,7 +22,7 @@ import { joinChemin } from "./ExporterCommande";
  *     disque (statut "complet" mais fichier supprimé à la main, export
  *     jamais fait, etc.). Action attendue : ré-exporter.
  *  3. `orphelinsExport` — fichiers du `dossierExport` au format
- *     `{slug}_N_i.jpg` qui ne correspondent à AUCUN tirage courant
+ *     `{slug}{n}.{photo}.{i}.jpg` qui ne correspondent à AUCUN tirage courant
  *     (restes d'acheteurs supprimés, tirages retirés sans ré-export,
  *     slugs d'anciens noms après renommage). Action attendue :
  *     suppression opt-in par l'utilisateur.
@@ -163,7 +163,7 @@ export class ControlerCoherenceSessionUseCase {
     }
 
     // Orphelins : fichiers sur disque dans un format valide, parsables
-    // comme `{slug}_{photo}_{i}.jpg`, mais pas attendus par les
+    // comme `{slug}{n}.{photo}.{i}.jpg`, mais pas attendus par les
     // commandes courantes.
     const slugVersAcheteurId = new Map<string, string>();
     for (const a of session.acheteurs) {
